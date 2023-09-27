@@ -125,9 +125,6 @@ int main(int argc, char *argv[])
             // Write the buffer in the port
             int bytes = write(fd, set_up, BUF_SIZE);
 
-            // Wait until all bytes have been written to the serial port
-            sleep(1);
-
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE; // Enable alarm
         }
