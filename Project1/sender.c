@@ -6,20 +6,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <termios.h>
+#include <signal.h>
 #include <unistd.h>
+#include <termios.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
 #define BAUDRATE B38400
 #define _POSIX_SOURCE 1 // POSIX compliant source
 
-#define FALSE 0
 #define TRUE 1
+#define FALSE 0
 
 #define BUF_SIZE 256
+
+int alarmCount = 0;
+int alarmEnabled = FALSE;
+
+// Alarm function handler
+void alarmHandler(int signal)
+{
+    alarmEnabled = FALSE;
+    alarmCount++;
+
+    printf("Alarm #%d\n", alarmCount);
+}
 
 volatile int STOP = FALSE;
 
@@ -89,48 +102,44 @@ int main(int argc, char *argv[])
 	
 	// ---------------------- //
 
-	/* SEND SET UP PACKAGE */
-    printf("Preparing to send SET UP package\n");
+    // Set alarm function handler
+    (void)signal(SIGALRM, alarmHandler);
 
     // Create SET UP buffer
     unsigned char set_up[BUF_SIZE] = {0};
+    // Create buffer to fill with UA package
+    unsigned char bufrec[BUF_SIZE + 1] = {0};
 
-	// Fill the buffer
+	// Fill the SET UP buffer
     set_up[0] = 0x7E;
     set_up[1] = 0x03;
     set_up[2] = 0x03;
     set_up[3] = set_up[1] ^ set_up[2];
     set_up[4] = 0x7E;
 
-	// Write the buffer in the port
-    int bytes = write(fd, set_up, BUF_SIZE);
-    printf("%d bytes written\n", bytes);
-
-    // Wait until all bytes have been written to the serial port
-    sleep(1);
-	
-	// Package sent
-	printf("SET UP package sent\n");
-	
-	// ---------------------- //
-	
-	/* RECEIVE UA PACKAGE */
-	printf("Preparing to receive UA package\n");
-	
-	// Create buffer to fill with UA package
-    unsigned char bufrec[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
-
-    while (STOP == FALSE)
+    // Trying to send the SET UP
+    while (alarmCount < 4)
     {
+        if (alarmEnabled == FALSE)
+        {
+            // Write the buffer in the port
+            int bytes = write(fd, set_up, BUF_SIZE);
+
+            // Wait until all bytes have been written to the serial port
+            sleep(1);
+
+            alarm(3); // Set alarm to be triggered in 3s
+            alarmEnabled = TRUE; // Enable alarm
+        }
+
         // Receive the UA package if available
         int bytes = read(fd, bufrec, BUF_SIZE);
-        bufrec[bytes] = '\0'; // Set end of string to '\0', so we can printf
-        printf(":%s:%d\n", bufrec, bytes);
 		
 		// Check if it is a UA package
         if (bufrec[0] == 0x7E && bufrec[2] == 0x07) {
-            STOP = TRUE;
             printf("Received UA!\n");
+            alarm(0); // Disable alarm
+            break;
         }
     }
 	
