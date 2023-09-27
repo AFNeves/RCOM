@@ -84,17 +84,21 @@ int main(int argc, char *argv[])
 
 	// ---------------------- //
 
+    printf("Setting up connection...\n");
+
     // Create UA buffer
     unsigned char buf[BUF_SIZE] = {0};
     // Create buffer to fill with SET UP package
     unsigned char bufrec[BUF_SIZE + 1] = {0};
 
     // Fill the UA buffer
-    set_up[0] = FLAG;
-    set_up[1] = UA_ADDRESS;
-    set_up[2] = UA_CONTROL;
-    set_up[3] = UA_BCC;
-    set_up[4] = FLAG;
+    buf[0] = FLAG;
+    buf[1] = UA_ADDRESS;
+    buf[2] = UA_CONTROL;
+    buf[3] = UA_BCC;
+    buf[4] = FLAG;
+
+    printf("Awaiting SET UP...\n");
 
     int state = STATE_START;
     while (state != STATE_STOP)
@@ -158,11 +162,12 @@ int main(int argc, char *argv[])
                 if (bufrec[0] == FLAG)
                 {
                     state = STATE_STOP;
-                    printf("Received SET UP\n");
+
+                    printf("Received SET UP!\n");
                     
                     // Write the buffer in the port
                     int bytes = write(fd, buf, BUF_SIZE);
-	                printf("UA package sent\n");
+	                printf("UA sent.\n");
                 }
                 else
                 {

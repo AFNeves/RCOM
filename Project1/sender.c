@@ -29,7 +29,7 @@ void alarmHandler(int signal)
     alarmEnabled = FALSE;
     alarmCount++;
 
-    printf("Alarm #%d\n", alarmCount);
+    printf("-- Alarm #%d --\n", alarmCount);
 }
 
 int main(int argc, char *argv[])
@@ -98,6 +98,8 @@ int main(int argc, char *argv[])
 
     // ---------------------- //
 
+    printf("Setting up connection...\n");
+
     // Set alarm function handler
     (void)signal(SIGALRM, alarmHandler);
 
@@ -120,6 +122,9 @@ int main(int argc, char *argv[])
         {
             // Write the buffer in the port
             int bytes = write(fd, set_up, BUF_SIZE);
+
+            printf("SET UP sent.\n");
+            printf("Awaiting UA...\n");
 
             alarm(3);            // Set alarm to be triggered in 3s
             alarmEnabled = TRUE; // Enable alarm
@@ -184,7 +189,7 @@ int main(int argc, char *argv[])
                 if (bufrec[0] == FLAG)
                 {
                     state = STATE_STOP;
-                    printf("Received UA\n");
+                    printf("Received UA!\n");
                 }
                 else
                 {
