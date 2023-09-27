@@ -1,7 +1,3 @@
-// Write to serial port in non-canonical mode
-//
-// Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
-
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +7,8 @@
 #include <termios.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#include "macros.h" // File containing all the macros
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
@@ -33,8 +31,6 @@ void alarmHandler(int signal)
 
     printf("Alarm #%d\n", alarmCount);
 }
-
-volatile int STOP = FALSE;
 
 int main(int argc, char *argv[])
 {
@@ -81,7 +77,7 @@ int main(int argc, char *argv[])
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
     newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 1;  // Blocking read until 5 chars received
+    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
 
     // VTIME e VMIN should be changed in order to protect with a
     // timeout the reception of the following character(s)
@@ -99,8 +95,8 @@ int main(int argc, char *argv[])
         perror("tcsetattr");
         exit(-1);
     }
-	
-	// ---------------------- //
+
+    // ---------------------- //
 
     // Set alarm function handler
     (void)signal(SIGALRM, alarmHandler);
@@ -110,37 +106,99 @@ int main(int argc, char *argv[])
     // Create buffer to fill with UA package
     unsigned char bufrec[BUF_SIZE + 1] = {0};
 
-	// Fill the SET UP buffer
-    set_up[0] = 0x7E;
-    set_up[1] = 0x03;
-    set_up[2] = 0x03;
-    set_up[3] = set_up[1] ^ set_up[2];
-    set_up[4] = 0x7E;
+    // Fill the SET UP buffer
+    set_up[0] = FLAG;
+    set_up[1] = SET_UP_ADDRESS;
+    set_up[2] = SET_UP_CONTROL;
+    set_up[3] = SET_UP_BCC;
+    set_up[4] = FLAG;
 
-    // Trying to send the SET UP
-    while (alarmCount < 4)
+    int state = STATE_START;
+    while (state != STATE_STOP && alarmCount < 4)
     {
         if (alarmEnabled == FALSE)
         {
             // Write the buffer in the port
             int bytes = write(fd, set_up, BUF_SIZE);
 
-            alarm(3); // Set alarm to be triggered in 3s
+            alarm(3);            // Set alarm to be triggered in 3s
             alarmEnabled = TRUE; // Enable alarm
         }
 
         // Receive the UA package if available
-        int bytes = read(fd, bufrec, BUF_SIZE);
-		
-		// Check if it is a UA package
-        if (bufrec[0] == 0x7E && bufrec[2] == 0x07) {
-            printf("Received UA!\n");
-            alarm(0); // Disable alarm
-            break;
+        int bytes = read(fd, bufrec, 1);
+
+        if (bytes > 0)
+        {
+            switch (state)
+            {
+            case STATE_START:
+                if (bufrec[0] == FLAG)
+                {
+                    state = STATE_FLAG_RCV;
+                }
+                break;
+            case STATE_FLAG_RCV:
+                if (bufrec[0] == UA_ADDRESS)
+                {
+                    state = STATE_A_RCV;
+                }
+                else if (bufrec[0] == FLAG)
+                {
+                    state = STATE_FLAG_RCV;
+                }
+                else
+                {
+                    state = STATE_START;
+                }
+                break;
+            case STATE_A_RCV:
+                if (bufrec[0] == UA_CONTROL)
+                {
+                    state = STATE_C_RCV;
+                }
+                else if (bufrec[0] == FLAG)
+                {
+                    state = STATE_FLAG_RCV;
+                }
+                else
+                {
+                    state = STATE_START;
+                }
+                break;
+            case STATE_C_RCV:
+                if (bufrec[0] == UA_BCC)
+                {
+                    state = STATE_BCC_OK;
+                }
+                else if (bufrec[0] == FLAG)
+                {
+                    state = STATE_FLAG_RCV;
+                }
+                else
+                {
+                    state = STATE_START;
+                }
+                break;
+            case STATE_BCC_OK:
+                if (bufrec[0] == FLAG)
+                {
+                    state = STATE_STOP;
+                    printf("Received UA\n");
+                }
+                else
+                {
+                    state = STATE_START;
+                }
+                break;
+            default:
+                printf("ERROR: No state with such name\n");
+                break;
+            }
         }
     }
-	
-	// ---------------------- //
+
+    // ---------------------- //
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
