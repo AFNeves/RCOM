@@ -4,6 +4,16 @@
 #ifndef _LINK_LAYER_H_
 #define _LINK_LAYER_H_
 
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include <termios.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 typedef enum
 {
     LlTx,
@@ -19,13 +29,42 @@ typedef struct
     int timeout;
 } LinkLayer;
 
-// SIZE of maximum acceptable payload.
-// Maximum number of bytes that application layer should send to link layer
-#define MAX_PAYLOAD_SIZE 1000
+typedef enum {
+    START,
+    FLAG_RCV,
+    A_RCV,
+    C_RCV,
+    BCC1_OK,
+    BCC2_OK,
+    STOP
+} LinkLayerState;
 
-// MISC
+// ----- MACROS -----
+
+#define MAX_PAYLOAD_SIZE 1000
+#define BAUDRATE 38400
+#define _POSIX_SOURCE 1
+
+#define BUF_SIZE 256
 #define FALSE 0
 #define TRUE 1
+
+// FRAMES
+
+#define FLAG 0x7E
+#define ESC 0x7D
+
+#define A_ER 0x03
+#define A_RE 0x01
+
+#define C_SET 0x03
+#define C_UA 0x07
+#define C_RR0 0x05
+#define C_RR1 0x85
+#define C_REJ0 0x01
+#define C_REJ1 0x81
+#define C_DISC 0x0B
+#define C_I(N) (N << 6)
 
 // Open a connection using the "port" parameters defined in struct linkLayer.
 // Return "1" on success or "-1" on error.
@@ -43,5 +82,14 @@ int llread(unsigned char *packet);
 // if showStatistics == TRUE, link layer should print statistics in the console on close.
 // Return "1" on success or "-1" on error.
 int llclose(int showStatistics);
+
+// Alarm function handler
+void alarmHandler(int signal);
+
+// Send supervision frame
+int sendSupervisionFrame(int serialPort, unsigned char A, unsigned char C);
+
+// Checks the quality of the received control frame and returns its control byte
+unsigned char checkControlFrame(int fd);
 
 #endif // _LINK_LAYER_H_
