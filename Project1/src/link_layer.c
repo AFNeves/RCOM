@@ -31,7 +31,7 @@ unsigned char checkControlFrame(int fd)
     unsigned char byte, C;
     LinkLayerState state = START;
 
-    while (state != STOP)
+    while (state != STOP && alarmEnabled == TRUE)
     {
         if (read(fd, byte, 1) > 0)
         {
@@ -50,7 +50,8 @@ unsigned char checkControlFrame(int fd)
                     state = START;
                 break;
             case A_RCV:
-                if (byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1) || byte == C_DISC) {
+                if (byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1) || byte == C_DISC)
+                {
                     state = C_RCV;
                     C = byte;
                 }
@@ -69,7 +70,10 @@ unsigned char checkControlFrame(int fd)
                 break;
             case BCC1_OK:
                 if (byte == FLAG)
+                {
+                    alarm(0);
                     state = STOP; // Received Control Frame!
+                }
                 else
                     state = START;
                 break;
@@ -229,9 +233,70 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 int llwrite(int fd, const unsigned char *buf, int bufSize)
 {
-    //TODO
+    int frameSize = bufSize + 6;
+    unsigned char *frame = (unsigned char *) malloc(frameSize);
 
-    return 0;
+    frame[0] = FLAG;
+    frame[1] = A_ER;
+    frame[2] = C_I(tramaT);
+    frame[3] = frame[1] ^ frame[2];
+    memcpy(frame + 4, buf, bufSize);
+
+    unsigned char BCC2 = buf[0];
+    for (int i = 1 ; i < bufSize ; i++) BCC2 ^= buf[i];
+
+    for (int i = 4 ; i < frameSize - 1; i++)
+    {
+        if (frame[i] == FLAG)
+        {
+            frameSize += 2;
+            frame = realloc(frame,frameSize);
+
+            memmove(frame + i + 2, frame + i, frameSize - i - 2);
+
+            frame[i++] = ESC;
+            frame[i++] = 0x5D;
+            frame[i++] = 0x5E;
+        }
+        else if (frame[i] == ESC)
+        {
+            frame = realloc(frame,++frameSize);
+
+            memmove(frame + i + 1, frame + i, frameSize - i - 1);
+
+            frame[i++] = ESC;
+            frame[i++] = 0x5D;
+        }
+    }
+
+    frame[i++] = BCC2;
+    frame[i] = FLAG;
+
+    unsigned char C;
+    LinkLayerState state = START;
+    alarmCount = nRetransmissions;
+
+    (void)signal(SIGALRM, alarmHandler);
+    while (alarmCount != 0 && state != STOP)
+    {
+        if (alarmEnabled == FALSE)
+        {
+            write(fd, frame, frameSize);
+            alarm(timeout);
+            alarmEnabled = TRUE;
+        }
+
+        C = checkControlFrame(fd);
+
+        if (C == C_RR(0) || C == C_RR(1))
+        {
+            state = STOP;
+            tramaT = (tramaT + 1) % 2;
+        }
+    }
+
+    free(frame);
+    return (state == STOP) ? frameSize : -1;
 }
 
 ////////////////////////////////////////////////
@@ -249,7 +314,8 @@ int llread(unsigned char *packet)
 ////////////////////////////////////////////////
 int llclose(int fd, LinkLayerRole role)
 {
-    if (role == LlRx) {
+    if (role == LlRx)
+    {
         // Restore the old port settings
         if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
         {
