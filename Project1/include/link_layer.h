@@ -1,5 +1,4 @@
 // Link layer header.
-// NOTE: This file must not be changed.
 
 #ifndef _LINK_LAYER_H_
 #define _LINK_LAYER_H_
@@ -69,6 +68,8 @@ typedef enum {
 #define C_RR(N) ((N << 7) || 0x05)
 #define C_REJ(N) ((N << 7) || 0x01)
 
+// ----- MAIN FUNCTIONS -----
+
 // Open a connection using the "port" parameters defined in struct linkLayer.
 // Return "1" on success or "-1" on error.
 int llopen(LinkLayer connectionParameters);
@@ -85,6 +86,8 @@ int llread(unsigned char *packet);
 // if showStatistics == TRUE, link layer should print statistics in the console on close.
 // Return "1" on success or "-1" on error.
 int llclose(int showStatistics);
+
+// ----- AUX FUNCTIONS -----
 
 // Alarm function handler
 void alarmHandler(int signal);

@@ -7,7 +7,7 @@ int alarmEnabled = FALSE;
 int timeout = 0;
 int nRetransmissions = 0;
 unsigned char tramaT = 0;
-unsigned char tramaR = 1;
+unsigned char tramaR = 0;
 
 struct termios oldtio;
 struct termios newtio;
@@ -86,7 +86,77 @@ unsigned char checkControlFrame(int fd)
 
 int receiverCloser(int fd)
 {
+    unsigned char byte;
+    LinkLayerState state = START;
+    alarmCount = nRetransmissions;
 
+    (void)signal(SIGALRM, alarmHandler);
+    while (alarmCount != 0 && state != STOP)
+    {
+        if (alarmEnabled == FALSE)
+        {
+            sendSupervisionFrame(fd, A_ER, C_DISC);
+            alarm(timeout);
+            alarmEnabled = TRUE;
+        }
+
+        if (read(fd, byte, 1) > 0)
+        {
+            switch (state)
+            {
+            case START:
+                if (byte == FLAG)
+                    state = FLAG_RCV;
+                break;
+            case FLAG_RCV:
+                if (byte == A_RE)
+                    state = A_RCV;
+                else
+                    state = START;
+                break;
+            case A_RCV:
+                if (byte == C_UA)
+                    state = C_RCV;
+                else if (byte == FLAG)
+                    state = FLAG_RCV;
+                else
+                    state = START;
+                break;
+            case C_RCV:
+                if (byte == (A_RE ^ C_UA))
+                    state = BCC1_OK;
+                else if (byte == FLAG)
+                    state = FLAG_RCV;
+                else
+                    state = START;
+                break;
+            case BCC1_OK:
+                if (byte == FLAG)
+                {
+                    alarm(0);
+                    state = STOP; // Received DISC!
+                }
+                else
+                    state = START;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    if (state != STOP) return -1;
+
+    // Restore the old port settings
+    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+    {
+        perror("tcsetattr");
+        exit(-1);
+    }
+
+    close(fd);
+
+    return 0;
 }
 
 ////////////////////////////////////////////////
@@ -356,8 +426,8 @@ int llread(int fd, unsigned char *packet)
 
                     if (BBC2 == checkBBC2)
                     {
-                        sendSupervisionFrame(fd, A_RE, C_RR(tramaRx));
                         tramaR = (tramaR + 1) % 2;
+                        sendSupervisionFrame(fd, A_RE, C_RR(tramaRx));
                         return i;
                     }
                     else
