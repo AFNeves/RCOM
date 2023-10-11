@@ -44,13 +44,11 @@ unsigned char checkControlFrame(int fd)
             case FLAG_RCV:
                 if (byte == A_RE)
                     state = A_RCV;
-                else if (byte == FLAG)
-                    state = FLAG_RCV;
                 else
                     state = START;
                 break;
             case A_RCV:
-                if (byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1) || byte == C_DISC)
+                if (byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1) || byte == C_DISC || byte == C_UA)
                 {
                     state = C_RCV;
                     C = byte;
@@ -84,6 +82,11 @@ unsigned char checkControlFrame(int fd)
     }
     
     return C;
+}
+
+int receiverCloser(int fd)
+{
+
 }
 
 ////////////////////////////////////////////////
@@ -127,8 +130,6 @@ int llopen(LinkLayer connectionParameters)
                 case FLAG_RCV:
                     if (byte == A_RE)
                         state = A_RCV;
-                    else if (byte == FLAG)
-                        state = FLAG_RCV;
                     else
                         state = START;
                     break;
@@ -183,8 +184,6 @@ int llopen(LinkLayer connectionParameters)
                 case FLAG_RCV:
                     if (byte == A_ER)
                         state = A_RCV;
-                    else if (byte == FLAG)
-                        state = FLAG_RCV;
                     else
                         state = START;
                     break;
@@ -255,8 +254,8 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
             memmove(frame + i + 2, frame + i, frameSize - i - 2);
 
             frame[i++] = ESC;
-            frame[i++] = 0x5D;
-            frame[i++] = 0x5E;
+            frame[i++] = ESC_1;
+            frame[i] = ESC_2;
         }
         else if (frame[i] == ESC)
         {
@@ -265,7 +264,7 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
             memmove(frame + i + 1, frame + i, frameSize - i - 1);
 
             frame[i++] = ESC;
-            frame[i++] = 0x5D;
+            frame[i] = ESC_1;
         }
     }
 
@@ -302,11 +301,97 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 // LLREAD
 ////////////////////////////////////////////////
-int llread(unsigned char *packet)
+int llread(int fd, unsigned char *packet)
 {
-    // TODO
+    int framePos = 0;
+    unsigned char byte, CByte;
+    LinkLayerState state = START;
 
-    return 0;
+    while (1)
+    {
+        if (read(fd, byte, 1) > 0)
+        {
+            switch (state)
+            {
+            case START:
+                if (byte == FLAG)
+                    state = FLAG_RCV;
+                break;
+            case FLAG_RCV:
+                if (byte == A_RE)
+                    state = A_RCV;
+                else
+                    state = START;
+                break;
+            case A_RCV:
+                if (byte == C_I(0) || byte == C_I(1))
+                {
+                    CByte = byte;
+                    state = C_RCV;
+                }
+                else if (byte == C_DISC)
+                    return receiverCloser(fd);
+                else if (byte == FLAG)
+                    state = FLAG_RCV;
+                else
+                    state = START;
+                break;
+            case C_RCV:
+                if (byte == (A_RE ^ CByte))
+                    state = READING_DATA;
+                else if (byte == FLAG)
+                    state = FLAG_RCV;
+                else
+                    state = START;
+                break;
+            case READING_DATA:
+                if (byte == ESC) state = FOUND_ESC;
+                else if (byte == FLAG)
+                {
+                    unsigned char BBC2 = packet[--i];
+                    packet[i] = '\0';
+
+                    unsigned char checkBBC2 = packet[0];
+                    for (int j = 1 ; j < i ; j++) checkBBC2 ^= packet[j];
+
+                    if (BBC2 == checkBBC2)
+                    {
+                        sendSupervisionFrame(fd, A_RE, C_RR(tramaRx));
+                        tramaR = (tramaR + 1) % 2;
+                        return i;
+                    }
+                    else
+                    {
+                        sendSupervisionFrame(fd, A_RE, C_REJ(tramaRx));
+                        return -1;
+                    }
+                }
+                else packet[framePos++] = byte;
+                break;
+            case FOUND_ESC:
+                if (byte == ESC_1) state = AFTER_ESC;
+                else
+                {
+                    packet[i++] = ESC;
+                    packet[i++] = byte;
+                    state = READING_DATA;
+                }
+                break;
+            case AFTER_ESC:
+                state = READING_DATA
+                if (byte == ESC_2) packet[i++] = FLAG;
+                else
+                {
+                    packet[i++] = ESC;
+                    packet[i++] = byte;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    return -1;
 }
 
 ////////////////////////////////////////////////
@@ -352,8 +437,6 @@ int llclose(int fd, LinkLayerRole role)
             case FLAG_RCV:
                 if (byte == A_RE)
                     state = A_RCV;
-                else if (byte == FLAG)
-                    state = FLAG_RCV;
                 else
                     state = START;
                 break;

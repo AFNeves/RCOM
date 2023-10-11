@@ -34,6 +34,9 @@ typedef enum {
     FLAG_RCV,
     A_RCV,
     C_RCV,
+    READING_DATA,
+    FOUND_ESC,
+    AFTER_ESC,
     BCC1_OK,
     BCC2_OK,
     STOP
@@ -53,6 +56,8 @@ typedef enum {
 
 #define FLAG 0x7E
 #define ESC 0x7D
+#define ESC_1 0x5D
+#define ESC_2 0x5E
 
 #define A_ER 0x03
 #define A_RE 0x01
@@ -89,5 +94,8 @@ int sendSupervisionFrame(int serialPort, unsigned char A, unsigned char C);
 
 // Checks the quality of the received control frame and returns its control byte
 unsigned char checkControlFrame(int fd);
+
+//Handles the closing of the port on the receiver side
+int receiverCloser(int fd);
 
 #endif // _LINK_LAYER_H_
