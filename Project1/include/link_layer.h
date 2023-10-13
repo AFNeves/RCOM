@@ -99,6 +99,6 @@ int sendSupervisionFrame(int serialPort, unsigned char A, unsigned char C);
 unsigned char checkControlFrame(int fd);
 
 //Handles the closing of the port on the receiver side
-int receiverCloser(int fd);
+int llclose(int fd, LinkLayerRole role);
 
 #endif // _LINK_LAYER_H_

@@ -80,83 +80,8 @@ unsigned char checkControlFrame(int fd)
             }
         }
     }
-    
+
     return C;
-}
-
-int receiverCloser(int fd)
-{
-    unsigned char byte;
-    LinkLayerState state = START;
-    alarmCount = nRetransmissions;
-
-    (void)signal(SIGALRM, alarmHandler);
-    while (alarmCount != 0 && state != STOP)
-    {
-        if (alarmEnabled == FALSE)
-        {
-            sendSupervisionFrame(fd, A_ER, C_DISC);
-            alarm(timeout);
-            alarmEnabled = TRUE;
-        }
-
-        if (read(fd, byte, 1) > 0)
-        {
-            switch (state)
-            {
-            case START:
-                if (byte == FLAG)
-                    state = FLAG_RCV;
-                break;
-            case FLAG_RCV:
-                if (byte == A_RE)
-                    state = A_RCV;
-                else
-                    state = START;
-                break;
-            case A_RCV:
-                if (byte == C_UA)
-                    state = C_RCV;
-                else if (byte == FLAG)
-                    state = FLAG_RCV;
-                else
-                    state = START;
-                break;
-            case C_RCV:
-                if (byte == (A_RE ^ C_UA))
-                    state = BCC1_OK;
-                else if (byte == FLAG)
-                    state = FLAG_RCV;
-                else
-                    state = START;
-                break;
-            case BCC1_OK:
-                if (byte == FLAG)
-                {
-                    alarm(0);
-                    state = STOP; // Received DISC!
-                }
-                else
-                    state = START;
-                break;
-            default:
-                break;
-            }
-        }
-    }
-
-    if (state != STOP) return -1;
-
-    // Restore the old port settings
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
-    {
-        perror("tcsetattr");
-        exit(-1);
-    }
-
-    close(fd);
-
-    return 0;
 }
 
 ////////////////////////////////////////////////
@@ -171,7 +96,8 @@ int llopen(LinkLayer connectionParameters)
     alarmCount = nRetransmissions;
 
     int fd = openSerialPort(connectionParameters.serialPort, &oldtio, &newtio);
-    if (fd < 0) return -1;
+    if (fd < 0)
+        return -1;
 
     switch (connectionParameters.role)
     {
@@ -234,7 +160,8 @@ int llopen(LinkLayer connectionParameters)
             }
         }
 
-        if (state != STOP) return -1;
+        if (state != STOP)
+            return -1;
         break;
     }
 
@@ -303,7 +230,7 @@ int llopen(LinkLayer connectionParameters)
 int llwrite(int fd, const unsigned char *buf, int bufSize)
 {
     int frameSize = bufSize + 6;
-    unsigned char *frame = (unsigned char *) malloc(frameSize);
+    unsigned char *frame = (unsigned char *)malloc(frameSize);
 
     frame[0] = FLAG;
     frame[1] = A_ER;
@@ -312,14 +239,15 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
     memcpy(frame + 4, buf, bufSize);
 
     unsigned char BCC2 = buf[0];
-    for (int i = 1 ; i < bufSize ; i++) BCC2 ^= buf[i];
+    for (int i = 1; i < bufSize; i++)
+        BCC2 ^= buf[i];
 
-    for (int i = 4 ; i < frameSize - 1; i++)
+    for (int i = 4; i < frameSize - 1; i++)
     {
         if (frame[i] == FLAG)
         {
             frameSize += 2;
-            frame = realloc(frame,frameSize);
+            frame = realloc(frame, frameSize);
 
             memmove(frame + i + 2, frame + i, frameSize - i - 2);
 
@@ -329,7 +257,7 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
         }
         else if (frame[i] == ESC)
         {
-            frame = realloc(frame,++frameSize);
+            frame = realloc(frame, ++frameSize);
 
             memmove(frame + i + 1, frame + i, frameSize - i - 1);
 
@@ -400,7 +328,7 @@ int llread(int fd, unsigned char *packet)
                     state = C_RCV;
                 }
                 else if (byte == C_DISC)
-                    return receiverCloser(fd);
+                    return -2;
                 else if (byte == FLAG)
                     state = FLAG_RCV;
                 else
@@ -415,14 +343,16 @@ int llread(int fd, unsigned char *packet)
                     state = START;
                 break;
             case READING_DATA:
-                if (byte == ESC) state = FOUND_ESC;
+                if (byte == ESC)
+                    state = FOUND_ESC;
                 else if (byte == FLAG)
                 {
                     unsigned char BBC2 = packet[--i];
                     packet[i] = '\0';
 
                     unsigned char checkBBC2 = packet[0];
-                    for (int j = 1 ; j < i ; j++) checkBBC2 ^= packet[j];
+                    for (int j = 1; j < i; j++)
+                        checkBBC2 ^= packet[j];
 
                     if (BBC2 == checkBBC2)
                     {
@@ -436,10 +366,12 @@ int llread(int fd, unsigned char *packet)
                         return -1;
                     }
                 }
-                else packet[framePos++] = byte;
+                else
+                    packet[framePos++] = byte;
                 break;
             case FOUND_ESC:
-                if (byte == ESC_1) state = AFTER_ESC;
+                if (byte == ESC_1)
+                    state = AFTER_ESC;
                 else
                 {
                     packet[i++] = ESC;
@@ -448,8 +380,7 @@ int llread(int fd, unsigned char *packet)
                 }
                 break;
             case AFTER_ESC:
-                state = READING_DATA
-                if (byte == ESC_2) packet[i++] = FLAG;
+                state = READING_DATA if (byte == ESC_2) packet[i++] = FLAG;
                 else
                 {
                     packet[i++] = ESC;
@@ -469,91 +400,167 @@ int llread(int fd, unsigned char *packet)
 ////////////////////////////////////////////////
 int llclose(int fd, LinkLayerRole role)
 {
-    if (role == LlRx)
+    switch (role)
     {
-        // Restore the old port settings
-        if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+        case LlTx:
         {
-            perror("tcsetattr");
-            exit(-1);
-        }
+            unsigned char byte;
+            LinkLayerState state = START;
+            alarmCount = nRetransmissions;
 
-        close(fd);
-        return 0;
-    }
-
-    unsigned char byte;
-    LinkLayerState state = START;
-    alarmCount = nRetransmissions;
-
-    (void)signal(SIGALRM, alarmHandler);
-    while (alarmCount != 0 && state != STOP)
-    {
-        if (alarmEnabled == FALSE)
-        {
-            sendSupervisionFrame(fd, A_ER, C_DISC);
-            alarm(timeout);
-            alarmEnabled = TRUE;
-        }
-
-        if (read(fd, byte, 1) > 0)
-        {
-            switch (state)
+            (void)signal(SIGALRM, alarmHandler);
+            while (alarmCount != 0 && state != STOP)
             {
-            case START:
-                if (byte == FLAG)
-                    state = FLAG_RCV;
-                break;
-            case FLAG_RCV:
-                if (byte == A_RE)
-                    state = A_RCV;
-                else
-                    state = START;
-                break;
-            case A_RCV:
-                if (byte == C_DISC)
-                    state = C_RCV;
-                else if (byte == FLAG)
-                    state = FLAG_RCV;
-                else
-                    state = START;
-                break;
-            case C_RCV:
-                if (byte == (A_RE ^ C_DISC))
-                    state = BCC1_OK;
-                else if (byte == FLAG)
-                    state = FLAG_RCV;
-                else
-                    state = START;
-                break;
-            case BCC1_OK:
-                if (byte == FLAG)
+                if (alarmEnabled == FALSE)
                 {
-                    alarm(0);
-                    state = STOP; // Received DISC!
+                    sendSupervisionFrame(fd, A_ER, C_DISC);
+                    alarm(timeout);
+                    alarmEnabled = TRUE;
                 }
-                else
-                    state = START;
-                break;
-            default:
-                break;
+
+                if (read(fd, byte, 1) > 0)
+                {
+                    switch (state)
+                    {
+                    case START:
+                        if (byte == FLAG)
+                            state = FLAG_RCV;
+                        break;
+                    case FLAG_RCV:
+                        if (byte == A_RE)
+                            state = A_RCV;
+                        else
+                            state = START;
+                        break;
+                    case A_RCV:
+                        if (byte == C_DISC)
+                            state = C_RCV;
+                        else if (byte == FLAG)
+                            state = FLAG_RCV;
+                        else
+                            state = START;
+                        break;
+                    case C_RCV:
+                        if (byte == (A_RE ^ C_DISC))
+                            state = BCC1_OK;
+                        else if (byte == FLAG)
+                            state = FLAG_RCV;
+                        else
+                            state = START;
+                        break;
+                    case BCC1_OK:
+                        if (byte == FLAG)
+                        {
+                            alarm(0);
+                            state = STOP; // Received DISC!
+                        }
+                        else
+                            state = START;
+                        break;
+                    default:
+                        break;
+                    }
+                }
             }
+
+            if (state != STOP) return -1;
+            sendSupervisionFrame(fd, A_ER, C_UA);
+
+            sleep(1);
+
+            // Restore the old port settings
+            if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+            {
+                perror("tcsetattr");
+                exit(-1);
+            }
+
+            close(fd);
+
+            return 0;
         }
+
+        case LlTx:
+        {
+            unsigned char byte;
+            LinkLayerState state = START;
+            alarmCount = nRetransmissions;
+
+            (void)signal(SIGALRM, alarmHandler);
+            while (alarmCount != 0 && state != STOP)
+            {
+                if (alarmEnabled == FALSE)
+                {
+                    sendSupervisionFrame(fd, A_ER, C_DISC);
+                    alarm(timeout);
+                    alarmEnabled = TRUE;
+                }
+
+                if (read(fd, byte, 1) > 0)
+                {
+                    switch (state)
+                    {
+                    case START:
+                        if (byte == FLAG)
+                            state = FLAG_RCV;
+                        break;
+                    case FLAG_RCV:
+                        if (byte == A_RE)
+                            state = A_RCV;
+                        else
+                            state = START;
+                        break;
+                    case A_RCV:
+                        if (byte == C_DISC)
+                            state = C_RCV;
+                        else if (byte == FLAG)
+                            state = FLAG_RCV;
+                        else
+                            state = START;
+                        break;
+                    case C_RCV:
+                        if (byte == (A_RE ^ C_DISC))
+                            state = BCC1_OK;
+                        else if (byte == FLAG)
+                            state = FLAG_RCV;
+                        else
+                            state = START;
+                        break;
+                    case BCC1_OK:
+                        if (byte == FLAG)
+                        {
+                            alarm(0);
+                            state = STOP; // Received DISC!
+                        }
+                        else
+                            state = START;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+            }
+
+            if (state != STOP) return -1;
+            sendSupervisionFrame(fd, A_ER, C_UA);
+
+            sleep(1);
+
+            // Restore the old port settings
+            if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+            {
+                perror("tcsetattr");
+                exit(-1);
+            }
+
+            close(fd);
+
+            return 0;
+        }
+
+        default:
+            break;
     }
-
-    if (state != STOP) return -1;
-    sendSupervisionFrame(fd, A_ER, C_UA);
-
-    sleep(1);
-
-    // Restore the old port settings
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
-    {
-        perror("tcsetattr");
-        exit(-1);
-    }
-
-    close(fd);
 
     return 0;
 }
