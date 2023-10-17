@@ -237,6 +237,12 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
             state = STOP;
             tramaT = (tramaT + 1) % 2;
         }
+
+        if (C == C_REJ(0) || C == C_REJ(1))
+        {
+            alarm(0);
+            alarmEnabled = FALSE;
+        }
     }
 
     free(frame);
