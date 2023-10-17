@@ -6,6 +6,7 @@ int alarmCount = 0;
 int alarmEnabled = FALSE;
 int timeout = 0;
 int nRetransmissions = 0;
+
 unsigned char tramaT = 0;
 unsigned char tramaR = 0;
 
@@ -17,23 +18,26 @@ void alarmHandler(int signal)
     alarmEnabled = FALSE;
     alarmCount--;
 
-    printf("--- Alarm #%d ---\n", alarmCount);
+    printf("--- Alarm Alert! ---\n");
 }
 
-int sendSupervisionFrame(int serialPort, unsigned char A, unsigned char C)
+int sendControlFrame(int serialPort, unsigned char A, unsigned char C)
 {
     unsigned char frame[5] = {FLAG, A, C, A ^ C, FLAG};
     return write(serialPort, frame, 5);
 }
 
-unsigned char checkControlFrame(int fd)
+unsigned char checkControlFrame(int serialPort, unsigned char A)
 {
-    unsigned char byte, C;
+    unsigned char prevAlarmStatus = alarmEnabled;
+    alarmEnabled == TRUE;
+
+    unsigned char byte, C = 0xFF;
     LinkLayerState state = START;
 
     while (state != STOP && alarmEnabled == TRUE)
     {
-        if (read(fd, byte, 1) > 0)
+        if (read(serialPort, byte, 1) > 0)
         {
             switch (state)
             {
@@ -42,13 +46,14 @@ unsigned char checkControlFrame(int fd)
                     state = FLAG_RCV;
                 break;
             case FLAG_RCV:
-                if (byte == A_RE)
+                if (byte == A)
                     state = A_RCV;
-                else
+                else if (byte != FLAG)
                     state = START;
                 break;
             case A_RCV:
-                if (byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1) || byte == C_DISC || byte == C_UA)
+                if (byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) ||
+                    byte == C_REJ(1) || byte == C_DISC || byte == C_UA || byte == C_SET)
                 {
                     state = C_RCV;
                     C = byte;
@@ -59,7 +64,7 @@ unsigned char checkControlFrame(int fd)
                     state = START;
                 break;
             case C_RCV:
-                if (byte == (A_RE ^ C))
+                if (byte == (A ^ C))
                     state = BCC1_OK;
                 else if (byte == FLAG)
                     state = FLAG_RCV;
@@ -69,8 +74,10 @@ unsigned char checkControlFrame(int fd)
             case BCC1_OK:
                 if (byte == FLAG)
                 {
-                    alarm(0);
-                    state = STOP; // Received Control Frame!
+                    // Received Valid Control Frame!
+                    if (prevAlarmStatus == TRUE) alarm(0);
+                    alarmEnabled = FALSE;
+                    state = STOP;
                 }
                 else
                     state = START;
@@ -84,135 +91,69 @@ unsigned char checkControlFrame(int fd)
     return C;
 }
 
+int openSerialPort(const char *serialPort)
+{
+    int fd = open(serialPort, O_RDWR | O_NOCTTY);
+
+    if (fd < 0) return -1;
+
+    if (tcgetattr(fd, oldtio) == -1) return -1;
+
+    memset(newtio, 0, sizeof(*newtio));
+    newtio->c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+    newtio->c_iflag = IGNPAR;
+    newtio->c_oflag = 0;
+    newtio->c_lflag = 0;
+    newtio->c_cc[VTIME] = 1; // Inter-character timer unused
+    newtio->c_cc[VMIN] = 0;  // Read without blocking
+    tcflush(fd, TCIOFLUSH);
+
+    if (tcsetattr(fd, TCSANOW, newtio) == -1) return -1;
+
+    return fd;
+}
+
 ////////////////////////////////////////////////
 // LLOPEN
 ////////////////////////////////////////////////
 int llopen(LinkLayer connectionParameters)
 {
-    unsigned char byte;
-    LinkLayerState state = START;
     timeout = connectionParameters.timeout;
+    alarmCount = connectionParameters.nRetransmissions;
     nRetransmissions = connectionParameters.nRetransmissions;
-    alarmCount = nRetransmissions;
 
-    int fd = openSerialPort(connectionParameters.serialPort, &oldtio, &newtio);
-    if (fd < 0)
-        return -1;
+    int fd = openSerialPort(connectionParameters.serialPort);
+    if (fd < 0) return -1;
 
     switch (connectionParameters.role)
     {
 
     case LlTx:
     {
-
         (void)signal(SIGALRM, alarmHandler);
-        while (alarmCount != 0 && state != STOP)
+        while (1)
         {
+            if (alarmCount == 0) return -1;
+
             if (alarmEnabled == FALSE)
             {
-                sendSupervisionFrame(fd, A_ER, C_SET);
+                sendControlFrame(fd, A_ER, C_SET);
                 alarm(timeout);
                 alarmEnabled = TRUE;
             }
 
-            if (read(fd, byte, 1) > 0)
-            {
-                switch (state)
-                {
-                case START:
-                    if (byte == FLAG)
-                        state = FLAG_RCV;
-                    break;
-                case FLAG_RCV:
-                    if (byte == A_RE)
-                        state = A_RCV;
-                    else
-                        state = START;
-                    break;
-                case A_RCV:
-                    if (byte == C_UA)
-                        state = C_RCV;
-                    else if (byte == FLAG)
-                        state = FLAG_RCV;
-                    else
-                        state = START;
-                    break;
-                case C_RCV:
-                    if (byte == (A_RE ^ C_UA))
-                        state = BCC1_OK;
-                    else if (byte == FLAG)
-                        state = FLAG_RCV;
-                    else
-                        state = START;
-                    break;
-                case BCC1_OK:
-                    if (byte == FLAG)
-                    {
-                        alarm(0);
-                        state = STOP; // Received UA!
-                    }
-                    else
-                        state = START;
-                    break;
-                default:
-                    break;
-                }
-            }
+            if (checkControlFrame(fd, A_RE) == C_UA) break;
         }
 
-        if (state != STOP)
-            return -1;
         break;
     }
 
     case LlRx:
     {
-
-        while (state != STOP)
-        {
-            if (read(fd, byte, 1) > 0)
-            {
-                switch (state)
-                {
-                case START:
-                    if (byte == FLAG)
-                        state = FLAG_RCV;
-                    break;
-                case FLAG_RCV:
-                    if (byte == A_ER)
-                        state = A_RCV;
-                    else
-                        state = START;
-                    break;
-                case A_RCV:
-                    if (byte == C_SET)
-                        state = C_RCV;
-                    else if (byte == FLAG)
-                        state = FLAG_RCV;
-                    else
-                        state = START;
-                    break;
-                case C_RCV:
-                    if (byte == (A_ER ^ C_SET))
-                        state = BCC1_OK;
-                    else if (byte == FLAG)
-                        state = FLAG_RCV;
-                    else
-                        state = START;
-                    break;
-                case BCC1_OK:
-                    if (byte == FLAG)
-                        state = STOP; // Received SET UP!
-                    else
-                        state = START;
-                    break;
-                default:
-                    break;
-                }
-            }
-        }
+        if (checkControlFrame(fd, A_ER) != C_SET) return -1;
 
         sendSupervisionFrame(fd, A_RE, C_UA);
+        
         break;
     }
 
