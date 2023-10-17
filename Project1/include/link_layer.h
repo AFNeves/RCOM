@@ -65,26 +65,21 @@ typedef enum {
 #define C_UA 0x07
 #define C_DISC 0x0B
 #define C_I(N) (N << 6)
-#define C_RR(N) ((N << 7) || 0x05)
-#define C_REJ(N) ((N << 7) || 0x01)
+#define C_RR(N) ((N << 7) | 0x05)
+#define C_REJ(N) ((N << 7) | 0x01)
 
 // ----- MAIN FUNCTIONS -----
 
-// Open a connection using the "port" parameters defined in struct linkLayer.
-// Return "1" on success or "-1" on error.
+// Sets up the connection with the serial port.
 int llopen(LinkLayer connectionParameters);
 
-// Send data in buf with size bufSize.
-// Return number of chars written, or "-1" on error.
+// Sends the data in buf.
 int llwrite(int fd, const unsigned char *buf, int bufSize);
 
-// Receive data in packet.
-// Return number of chars read, or "-1" on error.
+// Receives the data and writes it to the packet.
 int llread(int fd, unsigned char *packet);
 
-// Close previously opened connection.
-// if showStatistics == TRUE, link layer should print statistics in the console on close.
-// Return "1" on success or "-1" on error.
+// Closes the connection with the serial port.
 int llclose(int fd, LinkLayerRole role);
 
 // ----- AUX FUNCTIONS -----
