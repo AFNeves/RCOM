@@ -28,13 +28,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             long int fileSize = ftell(file) - prevPos;
             fseek(file,prevPos,SEEK_SET);
 
-            unsigned int cpSize;
-            unsigned char *controlPacket_Start = getControlPacket(2, filename, fileSize, &cpSize); //TODO
-            if (llwrite(fd, controlPacket_Start, cpSize) == -1)
-            { 
-                printf("Error in start package\n");
-                exit(-1);
-            }
+            int cpSize;
+            unsigned char *controlPacket_Start = getControlPacket(2, filename, fileSize, &cpSize);
+            if (llwrite(fd, controlPacket_Start, cpSize) == -1) exit(-1);
 
             long int bytesLeft = fileSize;
             unsigned char *fileData = getFileData(file, fileSize);
@@ -43,56 +39,62 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             {
                 int dataSize = bytesLeft > (long int) MAX_PAYLOAD_SIZE ? MAX_PAYLOAD_SIZE : bytesLeft;
                 unsigned char* data = (unsigned char *) malloc(dataSize);
+
                 memcpy(data, fileData, dataSize);
 
                 int packetSize;
                 unsigned char *packet = getDataPacket(data, dataSize, &packetSize);
                 
-                if (llwrite(fd, packet, packetSize) == -1)
-                {
-                    printf("Error in data packets\n");
-                    exit(-1);
-                }
+                if (llwrite(fd, packet, packetSize) == -1) exit(-1);
                 
                 fileData += dataSize;
                 bytesLeft -= (long int) MAX_PAYLOAD_SIZE;
             }
 
-            unsigned char *controlPacket_End = getControlPacket(3, filename, fileSize, &cpSize); //TODO
-            if(llwrite(fd, controlPacket_End, cpSize) == -1)
-            { 
-                printf("Error in end packet\n");
-                exit(-1);
-            }
+            unsigned char *controlPacket_End = getControlPacket(3, filename, fileSize, &cpSize);
+
+            if(llwrite(fd, controlPacket_End, cpSize) == -1) exit(-1);
 
             llclose(fd, LlTx);
+
             break;
         }
+
         case LlRx:
         {
-            int packetSize = -1;
             unsigned char *packet = (unsigned char *) malloc(MAX_PAYLOAD_SIZE);
 
+            int packetSize = -1;
             while ((packetSize = llread(fd, packet)) < 0);
 
-            unsigned long int fileSize;
-            unsigned char* filename = parseStartControlPacket(packet, packetSize, &fileSize);
+            long int fileSize;
+            unsigned char* name = parseControlPacket(packet, packetSize, &fileSize);
 
-            FILE* newFile = fopen((char *) filename, "wb+");
+            FILE* newFile = fopen((char *) name, "wb+");
             while (1) {    
                 while ((packetSize = llread(fd, packet)) < 0);
-                if (packet[0] != 3)
+                if (packet[0] == 1)
                 {
                     unsigned char *buffer = (unsigned char *) malloc(packetSize);
-                    parseDataPacket(buffer,packet, packetSize);
-                    fwrite(buffer, sizeof(unsigned char), packetSize - 4, newFile);
+                    memcpy(buffer, packet + 3, packetSize - 3);
+                    fwrite(buffer, sizeof(unsigned char), packetSize - 3, newFile);
                     free(buffer);
                 }
-                else if (packetSize == -2) llclose(fd, LlRx);
+                else if (packet[0] == 3)
+                {
+                    long int fileSize2;
+                    unsigned char* name2 = parseControlPacket(packet, packetSize, &fileSize);
+                    if ((fileSize == fileSize2) && (name == name2))
+                    {
+                        fclose(newFile);
+                        break;
+                    }
+                }
                 else break;
             }
 
-            fclose(newFile);
+            llclose(fd, LlRx);
+
             break;
         }
         default:
@@ -106,52 +108,67 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 unsigned char *getFileData(FILE* file, long int fileSize)
 {
     unsigned char *data = (unsigned char *) malloc(sizeof(unsigned char) * fileSize);
+
     fread(data, sizeof(unsigned char), fileSize, file);
+    
     return data;
 }
 
-unsigned char *makeControlPacket(const unsigned int C, const char* filename, long int fileSize, unsigned int* cpSize)
+unsigned char *getControlPacket(unsigned char C, const char *filename, long int fileSize, int *packetSize)
 {
+    int fileSizeBytes = (int) ceil(log2f((float) fileSize) / 8.0);
+
+    int fileNameBytes = strlen(filename);
+
+    *packetSize = 5 + fileSizeBytes + fileNameBytes;
+
+    unsigned char *packet = (unsigned char *) malloc(*packetSize);
     
+    int packetPos = 0;
+    packet[packetPos++] = C;
+    packet[packetPos++] = 0;
+    packet[packetPos++] = (unsigned char) fileSizeBytes;
+
+    for (int i = 0 ; i < fileSizeBytes ; i++)
+    {
+        packet[2 + fileSizeBytes - i] = (fileSize >> (8 * i)) & 0xFF;
+        packetPos++;
+    }
+
+    packet[packetPos++] = 1;
+    packet[packetPos++] = (unsigned char) fileNameBytes;
+
+    memcpy(packet + packetPos, filename, fileNameBytes);
+
+    return packet;
 }
 
+unsigned char *getDataPacket(unsigned char *data, int dataSize, int *packetSize)
+{
+    *packetSize = 3 + dataSize;
 
+    unsigned char *packet = (unsigned char *) malloc(*packetSize);
 
+    packet[0] = 1;
+    packet[1] = (unsigned char) dataSize / 256;
+    packet[2] = (unsigned char) dataSize % 256;
 
+    memcpy(packet + 3, data, dataSize);
 
+    return packet;
+}
 
+unsigned char *parseControlPacket(unsigned char* packet, long int *fileSize)
+{
+    unsigned char fileSizeBytes = packet[2];
+    unsigned char fileNameBytes = packet[4 + fileSizeBytes];
 
+    for (int i = 0; i < (int) fileSizeBytes; i++)
+        *fileSize |= packet[3 + fileSizeBytes - i] << (8 * i);
 
+    unsigned char *name = (unsigned char *) malloc(fileNameBytes);
 
+    memcpy(name, packet + 3 + fileSizeBytes + 2, fileNameBytes);
 
-
-
-
-
-
-
-
-unsigned char * getDataPacket(unsigned char sequence, unsigned char *data, int dataSize, int *packetSize);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-unsigned char* parseStartControlPacket(unsigned char *packet, int size, unsigned long int *fileSize);
-
-void parseDataPacket(const unsigned char* packet, const unsigned int packetSize, unsigned char* buffer);
-
-unsigned char * getData(FILE* fd, long int fileLength);
+    return name;
+}
