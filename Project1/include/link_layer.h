@@ -1,8 +1,9 @@
-// Link layer header.
+// Link layer protocol header.
 
 #ifndef _LINK_LAYER_H_
 #define _LINK_LAYER_H_
 
+#include <math.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +22,7 @@ typedef enum
 
 typedef struct
 {
-    char serialPort[50];
+    const char *serialPort;
     LinkLayerRole role;
     int baudRate;
     int nRetransmissions;
@@ -44,10 +45,7 @@ typedef enum {
 // ----- MACROS -----
 
 #define MAX_PAYLOAD_SIZE 1000
-#define BAUDRATE 38400
-#define _POSIX_SOURCE 1
 
-#define BUF_SIZE 256
 #define FALSE 0
 #define TRUE 1
 
@@ -94,6 +92,6 @@ int sendControlFrame(int serialPort, unsigned char A, unsigned char C);
 unsigned char checkControlFrame(int serialPort, unsigned char A);
 
 // Open serial port and set its parameters.
-int openSerialPort(const char *serialPort);
+int openSerialPort(const char *serialPort, int baudRate);
 
 #endif // _LINK_LAYER_H_
