@@ -5,8 +5,8 @@ CFLAGS = -Wall
 SRC = src/
 INCLUDE = include/
 BIN = bin/
-CABLE_DIR = cable/
 
+# ! CHANGE THIS !
 TX_SERIAL_PORT = /dev/ttyS10
 RX_SERIAL_PORT = /dev/ttyS11
 
@@ -15,13 +15,10 @@ RX_FILE = penguin-received.gif
 
 # Targets
 .PHONY: all
-all: $(BIN)/main $(BIN)/cable
+all: $(BIN)/main
 
 $(BIN)/main: main.c $(SRC)/*.c
-	$(CC) $(CFLAGS) -o $@ $^ -I$(INCLUDE)
-
-$(BIN)/cable: $(CABLE_DIR)/cable.c
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ -I$(INCLUDE) -lm
 
 .PHONY: run_tx
 run_tx: $(BIN)/main
@@ -31,10 +28,6 @@ run_tx: $(BIN)/main
 run_rx: $(BIN)/main
 	./$(BIN)/main $(RX_SERIAL_PORT) rx $(RX_FILE)
 
-.PHONY: run_cable
-run_cable: $(BIN)/cable
-	./$(BIN)/cable
-
 .PHONY: check_files
 check_files:
 	diff -s $(TX_FILE) $(RX_FILE) || exit 0
@@ -42,5 +35,4 @@ check_files:
 .PHONY: clean
 clean:
 	rm -f $(BIN)/main
-	rm -f $(BIN)/cable
 	rm -f $(RX_FILE)

@@ -1,26 +1,29 @@
-# RCOM Project1
+# RCOM Project 1
 
 ## Project Structure
 
 - bin/: Compiled binaries.
 - src/: Source code for the implementation of the link-layer and application layer protocols.
 - include/: Header files of the link-layer and application layer protocols.
-- cable/: Virtual cable program to help test the serial port.
 - main.c: Main file.
 - Makefile: Makefile to build the project and run the application.
 - penguin.gif: Example file to be sent through the serial port.
 
 ## Instructions to Run the Project
 
-1. Compile the application and the virtual cable program using the provided Makefile.
-2. Run the virtual cable program (either by running the executable manually or using the Makefile target):
+1. Compile the application using the provided Makefile.
 
 	```bash
-	$ ./bin/cable_app
-	$ make run_cable
+	$ make
 	```
 
-3. Test the protocol without cable disconnections and noise
+2. Run the socat command to create a virtual serial port pair.
+
+	```bash
+	$ sudo socat -d  -d  PTY,link=/dev/ttyS10,mode=777   PTY,link=/dev/ttyS11,mode=777
+	```
+
+3. Test the protocol by sending a file through the virtual serial port pair.
 
 	3.1 Run the receiver (either by running the executable manually or using the Makefile target):
 
@@ -42,8 +45,3 @@
 	$ diff -s penguin.gif penguin-received.gif
 	$ make check_files
 	```
-
-4. Test the protocol with cable disconnections and noise  
-	4.1. Run receiver and transmitter again  
-	4.2. Quickly move to the cable program console and press 0 for unplugging the cable, 2 to add noise, and 1 to normal  
-	4.3. Check if the file received matches the file sent, even with cable disconnections or with noise
