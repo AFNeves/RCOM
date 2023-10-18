@@ -18,6 +18,7 @@ RX_FILE = penguin-received.gif
 all: $(BIN)/main
 
 $(BIN)/main: main.c $(SRC)/*.c
+	@if [ ! -d $(BIN) ]; then mkdir -p $(BIN); fi
 	$(CC) $(CFLAGS) -o $@ $^ -I$(INCLUDE) -lm
 
 .PHONY: run_tx
