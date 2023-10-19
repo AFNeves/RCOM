@@ -1,6 +1,6 @@
 // Link layer protocol implementation
 
-#include "../include/link_layer.h"
+#include "link_layer.h"
 
 int alarmCount = 0;
 int alarmEnabled = FALSE;
@@ -97,7 +97,7 @@ unsigned char checkControlFrame(int serialPort, unsigned char A)
     return C;
 }
 
-int openSerialPort(const char *serialPort)
+int openSerialPort(const char *serialPort, int baudRate)
 {
     int fd = open(serialPort, O_RDWR | O_NOCTTY);
 
@@ -106,11 +106,11 @@ int openSerialPort(const char *serialPort)
     if (tcgetattr(fd, &oldtio) == -1) return -1;
 
     memset(&newtio, 0, sizeof(newtio));
-    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+    newtio.c_cflag = baudRate | CS8 | CLOCAL | CREAD;
     newtio.c_iflag = IGNPAR;
     newtio.c_oflag = 0;
     newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 1; // Inter-character timer unused
+    newtio.c_cc[VTIME] = 5; // Inter-character timer unused
     newtio.c_cc[VMIN] = 0;  // Read without blocking
     tcflush(fd, TCIOFLUSH);
 
@@ -128,7 +128,7 @@ int llopen(LinkLayer connectionParameters)
     alarmCount = connectionParameters.nRetransmissions;
     nRetransmissions = connectionParameters.nRetransmissions;
 
-    int fd = openSerialPort(connectionParameters.serialPort);
+    int fd = openSerialPort(connectionParameters.serialPort, connectionParameters.baudRate);
     if (fd < 0) return -1;
 
     switch (connectionParameters.role)
@@ -175,6 +175,14 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 int llwrite(int fd, const unsigned char *buf, int bufSize)
 {
+    printf("|               LLWRITE               |\n\n");
+
+    printf("Packet to send:\n\n");
+    printf("{ ");
+    for (int i = 0; i < bufSize; i++)
+        printf("%02X ", buf[i]);
+    printf("}\n\n");
+
     int frameSize = bufSize + 6;
     unsigned char *frame = (unsigned char *) malloc(frameSize);
 
@@ -183,6 +191,12 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
     frame[2] = C_I(tramaT);
     frame[3] = frame[1] ^ frame[2];
     memcpy(frame + 4, buf, bufSize);
+
+    printf("Frame pre-stuffing:\n\n");
+    printf("{ ");
+    for (int i = 0; i < frameSize; i++)
+        printf("%02X ", frame[i]);
+    printf("} %d\n\n", frameSize);
 
     unsigned char BCC2 = buf[0];
     for (int i = 1; i < bufSize; i++)
@@ -216,6 +230,12 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
     frame[i++] = BCC2;
     frame[i] = FLAG;
 
+    printf("Frame after-stuffing:\n\n");
+    printf("{ ");
+    for (int i = 0; i < frameSize; i++)
+        printf("%02X ", frame[i]);
+    printf("} %d\n\n", frameSize);
+
     unsigned char C;
     LinkLayerState state = START;
     alarmCount = nRetransmissions;
@@ -228,6 +248,7 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
             write(fd, &frame, frameSize);
             alarm(timeout);
             alarmEnabled = TRUE;
+            printf("Sent frame with %d bytes!\n", frameSize);
         }
 
         C = checkControlFrame(fd, A_RE);
@@ -254,14 +275,23 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 int llread(int fd, unsigned char *packet)
 {
+    printf("    LLREAD    \n\n");
+
     int packetPos = 0;
     unsigned char byte, C;
     LinkLayerState state = START;
 
-    while (1)
+    printf("{ ");
+
+    int i = 0, j = 0;
+    while (i < 50)
     {
+        //printf("Attempt %d\n", ++i);
         if (read(fd, &byte, 1) > 0)
         {
+            j++;
+            printf("%d. %02X byte", j, byte);
+
             switch (state)
             {
 
@@ -355,6 +385,8 @@ int llread(int fd, unsigned char *packet)
             }
         }
     }
+
+    exit(-1);
 }
 
 ////////////////////////////////////////////////

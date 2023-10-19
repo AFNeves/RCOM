@@ -16,6 +16,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     int fd = llopen(linkLayer);
     if (fd < 0) exit(-1);
 
+    printf("Connection established\n\n");
+
     switch (linkLayer.role)
     {
         case LlTx:
@@ -23,14 +25,27 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             FILE* file = fopen(filename, "rb");
             if (file == NULL) exit(-1);
 
+            printf("File OK\n\n");
+
             int prevPos = ftell(file);
             fseek(file,0L,SEEK_END);
             long int fileSize = ftell(file) - prevPos;
             fseek(file,prevPos,SEEK_SET);
 
+            printf("File Size: %ld\n\n", fileSize);
+
             int cpSize;
             unsigned char *controlPacket_Start = getControlPacket(2, filename, fileSize, &cpSize);
+
+            printf("Sending starter control packet:\n\n");
+            printf("{ ");
+            for (int i = 0; i < cpSize; i++)
+                printf("%02X ", controlPacket_Start[i]);
+            printf("} %d\n\n", cpSize);
+
             if (llwrite(fd, controlPacket_Start, cpSize) == -1) exit(-1);
+
+            printf("Starter control packet sent\n\n");
 
             long int bytesLeft = fileSize;
             unsigned char *fileData = getFileData(file, fileSize);
@@ -64,11 +79,19 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         {
             unsigned char *packet = (unsigned char *) malloc(MAX_PAYLOAD_SIZE);
 
+            printf("Searching for starter control packet\n\n");
+
             int packetSize = -1;
             while ((packetSize = llread(fd, packet)) < 0);
 
+            printf("Received starter control packet:\n\n");
+            printf("{ ");
+            for (int i = 0; i < packetSize; i++)
+                printf("%02X ", packet[i]);
+            printf("} %d\n\n", packetSize);
+
             long int fileSize;
-            unsigned char* name = parseControlPacket(packet, packetSize, &fileSize);
+            unsigned char* name = parseControlPacket(packet, &fileSize);
 
             FILE* newFile = fopen((char *) name, "wb+");
             while (1) {    
@@ -83,7 +106,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 else if (packet[0] == 3)
                 {
                     long int fileSize2;
-                    unsigned char* name2 = parseControlPacket(packet, packetSize, &fileSize);
+                    unsigned char* name2 = parseControlPacket(packet, &fileSize2);
                     if ((fileSize == fileSize2) && (name == name2))
                     {
                         fclose(newFile);
