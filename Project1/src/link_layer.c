@@ -315,7 +315,7 @@ int llread(int fd, unsigned char *packet)
 
                     if (BBC2 == checkBBC2)
                     {
-                        printf("}\n\n OK [%d,%d,%d]\n\n", packetPos, bytesRemoved, packetPos + 6 + bytesRemoved);
+                        printf("OK [%d,%d,%d]\n\n", packetPos, bytesRemoved, packetPos + 6 + bytesRemoved);
 
                         tramaR = (tramaR + 1) % 2;
                         sendControlFrame(fd, A_RE, C_RR(tramaR));
@@ -412,7 +412,7 @@ int llclose(int fd, LinkLayerRole role)
     {
         alarmCount = nRetransmissions;
 
-        if (checkControlFrame(fd, A_RE) != C_DISC) return -1;
+        if (checkControlFrame(fd, A_ER) != C_DISC) return -1;
 
         (void)signal(SIGALRM, alarmHandler);
         while (1)
@@ -421,12 +421,12 @@ int llclose(int fd, LinkLayerRole role)
 
             if (alarmEnabled == FALSE)
             {
-                sendControlFrame(fd, A_ER, C_DISC);
+                sendControlFrame(fd, A_RE, C_DISC);
                 alarm(timeout);
                 alarmEnabled = TRUE;
             }
 
-            if (checkControlFrame(fd, A_RE) == C_UA) break;
+            if (checkControlFrame(fd, A_ER) == C_UA) break;
         }
 
         break;

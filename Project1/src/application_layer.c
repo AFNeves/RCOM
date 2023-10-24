@@ -66,15 +66,17 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 bytesLeft -= (long int) MAX_PAYLOAD_SIZE;
             }
 
-            printf("Total Bytes Sent: %ld\n\n", totalBytesSent);
-
             unsigned char *controlPacket_End = getControlPacket(3, filename, fileSize, &cpSize);
 
             printf("Ending Control Packet: ");
 
             if(llwrite(fd, controlPacket_End, cpSize) == -1) exit(-1);
 
+            printf("Total Bytes Sent: %ld\n\n", totalBytesSent);
+
             llclose(fd, LlTx);
+
+            printf("Connection closed\n\n");
 
             break;
         }
@@ -82,6 +84,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         case LlRx:
         {
             unsigned char *packet = (unsigned char *) malloc(MAX_PAYLOAD_SIZE + 3);
+
+            printf("Starter Control Packet: ");
 
             int packetSize = -1;
             while ((packetSize = llread(fd, packet)) < 0);
@@ -94,8 +98,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
             FILE* newFile = fopen(filename, "wb+");
             if (newFile == NULL) exit(-1);
-
-            printf("\n|               PAYLOAD               |\n\n");
 
             int payloadNumber = 1;
             LinkLayerState state = START;
@@ -116,19 +118,11 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 {
                     printf("Total Bytes Received: %ld\n\n", totalBytesReceived);
 
-                    printf("\n|               PAYLOAD               |"
-                           "\n|                DONE!                |\n\n");
-
-                    printf("Received ending control packet:\n\n");
-
                     long int fileSize2;
                     name = parseControlPacket(packet, &fileSize2, nameAppendix);
 
-                    printf("File Size: %ld\n\n", fileSize);
-
-                    if ((fileSize == fileSize2) && (strcmp(filename, name) == 0))
+                    if ((fileSize == fileSize2))
                     {
-                        printf("CLOSING FILE\n\n");
                         fclose(newFile);
                         state = STOP;
                     }
@@ -138,11 +132,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 totalBytesReceived += packetSize - 3;
             }
 
-            printf("LLCLOSE CALL\n\n");
-
             llclose(fd, LlRx);
 
-            printf("SUCCESS!\n");
+            printf("Connection closed\n\n");
 
             break;
         }
@@ -159,6 +151,8 @@ unsigned char *getFileData(FILE* file, long int fileSize)
     unsigned char *data = (unsigned char *) malloc(sizeof(unsigned char) * fileSize);
 
     fread(data, sizeof(unsigned char), fileSize, file);
+
+    fclose(file);
     
     return data;
 }
