@@ -175,14 +175,6 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 int llwrite(int fd, const unsigned char *buf, int bufSize)
 {
-    printf("|               LLWRITE               |\n\n");
-
-    printf("Packet to send:\n\n");
-    printf("{ ");
-    for (int i = 0; i < bufSize; i++)
-        printf("%02X ", buf[i]);
-    printf("}\n\n");
-
     int frameSize = bufSize + 6;
     unsigned char *frame = (unsigned char *) malloc(frameSize);
 
@@ -192,22 +184,16 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
     frame[3] = frame[1] ^ frame[2];
     memcpy(frame + 4, buf, bufSize);
 
-    printf("Frame pre-stuffing:\n\n");
-    printf("{ ");
-    for (int i = 0; i < frameSize; i++)
-        printf("%02X ", frame[i]);
-    printf("} %d\n\n", frameSize);
-
     unsigned char BCC2 = buf[0];
     for (int i = 1; i < bufSize; i++)
         BCC2 ^= buf[i];
 
-    int i;
+    int i, bytesAdded = 0;
     for (i = 4; i < frameSize - 2; i++)
     {
         if (frame[i] == FLAG)
         {
-            frameSize += 2;
+            frameSize += 2; bytesAdded += 2;
             frame = realloc(frame, frameSize);
 
             memmove(frame + i + 2, frame + i, frameSize - i - 2);
@@ -218,7 +204,7 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
         }
         else if (frame[i] == ESC)
         {
-            frame = realloc(frame, ++frameSize);
+            frame = realloc(frame, ++frameSize); bytesAdded++;
 
             memmove(frame + i + 1, frame + i, frameSize - i - 1);
 
@@ -230,12 +216,6 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
     frame[i++] = BCC2;
     frame[i] = FLAG;
 
-    printf("Frame after-stuffing:\n\n");
-    printf("{ ");
-    for (int i = 0; i < frameSize; i++)
-        printf("%02X ", frame[i]);
-    printf("} %d\n\n", frameSize);
-
     unsigned char C;
     LinkLayerState state = START;
     alarmCount = nRetransmissions;
@@ -245,10 +225,9 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
     {
         if (alarmEnabled == FALSE)
         {
-            write(fd, &frame, frameSize);
+            write(fd, frame, frameSize);
             alarm(timeout);
             alarmEnabled = TRUE;
-            printf("Sent frame with %d bytes!\n", frameSize);
         }
 
         C = checkControlFrame(fd, A_RE);
@@ -257,6 +236,9 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
         {
             state = STOP;
             tramaT = (tramaT + 1) % 2;
+
+            if (frameSize == bufSize + 6 + bytesAdded) printf("OK [%d,%d,%d]\n\n", bufSize, bytesAdded, frameSize);
+            else printf("ERROR\n\n");
         }
 
         if (C == C_REJ(0) || C == C_REJ(1))
@@ -275,23 +257,14 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 int llread(int fd, unsigned char *packet)
 {
-    printf("    LLREAD    \n\n");
-
-    int packetPos = 0;
+    int packetPos = 0, bytesRemoved = 0;
     unsigned char byte, C;
     LinkLayerState state = START;
 
-    printf("{ ");
-
-    int i = 0, j = 0;
-    while (i < 50)
+    while (1)
     {
-        //printf("Attempt %d\n", ++i);
         if (read(fd, &byte, 1) > 0)
         {
-            j++;
-            printf("%d. %02X byte", j, byte);
-
             switch (state)
             {
 
@@ -334,7 +307,7 @@ int llread(int fd, unsigned char *packet)
                 else if (byte == FLAG)
                 {
                     unsigned char BBC2 = packet[--packetPos];
-                    packet[packetPos--] = '\0';
+                    packet[packetPos] = '\0';
 
                     unsigned char checkBBC2 = packet[0];
                     for (int j = 1; j < packetPos + 1; j++)
@@ -342,12 +315,16 @@ int llread(int fd, unsigned char *packet)
 
                     if (BBC2 == checkBBC2)
                     {
+                        printf("}\n\n OK [%d,%d,%d]\n\n", packetPos, bytesRemoved, packetPos + 6 + bytesRemoved);
+
                         tramaR = (tramaR + 1) % 2;
                         sendControlFrame(fd, A_RE, C_RR(tramaR));
                         return packetPos;
                     }
                     else
                     {
+                        printf("ERROR\n\n");
+
                         sendControlFrame(fd, A_RE, C_REJ(tramaR));
                         return -1;
                     }
@@ -372,11 +349,19 @@ int llread(int fd, unsigned char *packet)
                 if (byte == ESC_2)
                 {
                     packet[packetPos++] = FLAG;
+                    bytesRemoved += 2;
+                }
+                else if (byte == ESC)
+                {
+                    packet[packetPos++] = ESC;
+                    state = FOUND_ESC;
+                    bytesRemoved++;
                 }
                 else
                 {
                     packet[packetPos++] = ESC;
                     packet[packetPos++] = byte;
+                    bytesRemoved++;
                 }
                 break;
 
