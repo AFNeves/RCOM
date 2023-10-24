@@ -25,23 +25,20 @@
 
 3. Test the protocol by sending a file through the virtual serial port pair.
 
-	3.1 Run the receiver (either by running the executable manually or using the Makefile target):
+	3.1 Run the receiver.
 
 	```bash
-	$ ./bin/main /dev/ttyS11 rx penguin-received.gif
-	$ make run_tx
-	```
-
-	3.2 Run the transmitter (either by running the executable manually or using the Makefile target):
-
-	```bash
-	$ ./bin/main /dev/ttyS10 tx penguin.gif
 	$ make run_rx
 	```
 
-	3.3 Check if the file received matches the file sent, using the diff Linux command or using the Makefile target:
+	3.2 Run the transmitter in a separate terminal.
 
 	```bash
-	$ diff -s penguin.gif penguin-received.gif
+	$ make run_tx
+	```
+
+	3.3 Check if the file received matches the file sent.
+
+	```bash
 	$ make check_files
 	```
