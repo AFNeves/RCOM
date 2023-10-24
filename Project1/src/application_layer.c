@@ -53,7 +53,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             while (bytesLeft > 0)
             {
                 int dataSize = bytesLeft > (long int) MAX_PAYLOAD_SIZE ? MAX_PAYLOAD_SIZE : bytesLeft;
-                unsigned char* data = (unsigned char *) malloc(dataSize);
+                unsigned char *data = (unsigned char *) malloc(dataSize);
 
                 memcpy(data, fileData, dataSize);
 
@@ -77,6 +77,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
         case LlRx:
         {
+            const char *nameAppendix = "-received";
+
             unsigned char *packet = (unsigned char *) malloc(MAX_PAYLOAD_SIZE);
 
             printf("Searching for starter control packet\n\n");
@@ -91,7 +93,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             printf("} %d\n\n", packetSize);
 
             long int fileSize;
-            unsigned char* name = parseControlPacket(packet, &fileSize);
+            unsigned char *name = parseControlPacket(packet, &fileSize, nameAppendix);
 
             FILE* newFile = fopen((char *) name, "wb+");
             while (1) {    
@@ -106,7 +108,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 else if (packet[0] == 3)
                 {
                     long int fileSize2;
-                    unsigned char* name2 = parseControlPacket(packet, &fileSize2);
+                    unsigned char *name2 = parseControlPacket(packet, &fileSize2, nameAppendix);
                     if ((fileSize == fileSize2) && (name == name2))
                     {
                         fclose(newFile);
@@ -135,6 +137,23 @@ unsigned char *getFileData(FILE* file, long int fileSize)
     fread(data, sizeof(unsigned char), fileSize, file);
     
     return data;
+}
+
+char *getNewFilename(const char *filename, const char *appendix, int fileNameSize)
+{
+    const char *dotPosition = strrchr(filename, '.');
+
+    char *newFilename = (char *) malloc(fileNameSize);
+
+    strncpy(newFilename, filename, (int)(dotPosition - filename));
+
+    newFilename[(int)(dotPosition - filename)] = '\0';
+
+    strcat(newFilename, appendix);
+
+    strcat(newFilename, dotPosition);
+
+    return newFilename;
 }
 
 unsigned char *getControlPacket(unsigned char C, const char *filename, long int fileSize, int *packetSize)
@@ -181,17 +200,21 @@ unsigned char *getDataPacket(unsigned char *data, int dataSize, int *packetSize)
     return packet;
 }
 
-unsigned char *parseControlPacket(unsigned char* packet, long int *fileSize)
+char *parseControlPacket(unsigned char *packet, long int *fileSize, const char *appendix)
 {
-    unsigned char fileSizeBytes = packet[2];
-    unsigned char fileNameBytes = packet[4 + fileSizeBytes];
+    int fileSizeBytes = packet[2];
+    int fileNameBytes = packet[4 + fileSizeBytes];
 
-    for (int i = 0; i < (int) fileSizeBytes; i++)
+    for (int i = 0; i < fileSizeBytes; i++)
         *fileSize |= packet[3 + fileSizeBytes - i] << (8 * i);
 
-    unsigned char *name = (unsigned char *) malloc(fileNameBytes);
+    unsigned char *filename = (unsigned char *) malloc(fileNameBytes + 1);
 
-    memcpy(name, packet + 3 + fileSizeBytes + 2, fileNameBytes);
+    memcpy(filename, packet + 5 + fileSizeBytes, fileNameBytes);
 
-    return name;
+    filename[fileNameBytes] = '\0';
+
+    char *newFileName = getNewFilename(filename, appendix, fileNameBytes + strlen(appendix) + 1);
+
+    return newFileName;
 }

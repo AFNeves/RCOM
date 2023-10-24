@@ -13,8 +13,11 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 // Fetches the file data.
 unsigned char *getFileData(FILE* file, long int fileSize);
 
+// Generates the new filename.
+char *getNewFilename(const char *filename, const char *appendix, int fileNameSize);
+
 // Parses a control packet.
-unsigned char *parseControlPacket(unsigned char *packet, long int *fileSize);
+char *parseControlPacket(unsigned char *packet, long int *fileSize, const char *appendix);
 
 // Creates a data packet with the given parameters.
 unsigned char *getDataPacket(unsigned char *data, int dataSize, int *packetSize);
