@@ -1,0 +1,214 @@
+RESET CONFIG
+
+Desligar todos os cabos do router, switch e TUX.
+Ligar o TUX a porta T3 e o switch a T4.
+Ligar o GTKTerm introduzir o comando /system reset-configuration.
+
+-----------------------------
+
+Após fazer o reset do switch ligamos as portas E0 dos TUXs 3 e 4 ao switch.
+
+ifconfig eth0 up
+ifconfig eth0 172.16.60.1/24        TUX3
+ifconfig eth0 172.16.60.254/24      TUX4
+
+TUX3
+	IP:   			172.16.60.1
+	MAC:  			00:21:5a:61:2f:4e
+	
+TUX4
+	IP:   			172.16.60.254
+	MAC:  			00:21:5a:c5:61:bb
+	
+PING OK
+
+route -n:
+			Destination:	172.16.60.0
+			Gateway:        0.0.0.0
+			Genmask:        255.255.255.0
+			
+ARP: IP e MAC
+
+TUX3 delete ARP table: arp -d 172.16.60.1
+
+Inicamos o Wireshark no tuxY3.eth0 para capturar pacotes
+
+Salvamos o log
+
+----- QUESTIONS -----
+
+Commands required to perform:
+
+ifconfig [eth0] [up/down, ipaddress]
+route [-n]
+arp [-a, -d ipaddress]
+
+ARP is Address Resolution Protocol e dá para ver o IP e o MAC. São usados para explorar a linklayer address como o IPv4
+
+Ao fazer "arp -a" é mostrado a ARP table onde está armazenado o IP e o MAC do outro TUX. São enviados pela placa de internet para a placa do outro TUX trocando 1 par de pacotes entre eles com tamanhos diferentes.
+
+O comando ping gera pacotes do protocolo ICMP.
+
+Os IPs dos pacotes são os IPs dos TUX apresentando uma troca de pacotes entre os computadores.
+
+Podemos verificar o tipo de pacotes recebidos e enviados ao olhar para a aba Protocol do Wireshark.
+
+Ao verificar a aba Length.
+
+?
+
+-----------------------------------
+
+Ligamos o TUX2 E0 ao switch.
+
+ifconfig eth0 172.16.61.1/24
+
+TUX3
+	IP:   			172.16.61.1
+	MAC:  			00:21:5a:5a:7d:9c
+	
+BRIDGE COMMANDS:
+
+/interface bridge add name=bridge60
+/interface bridge add name=bridge61
+/interface bridge print
+
+/interface port print                Verificamos o status das portas onde tinhamos ligações.
+
+/interface bridge port remove [find interface=ether?] Portas com cabos ligados
+
+/interface bridge port add bridge=bridge6(0/1) interface=ether(6/8/13)
+
+Vericamos que conseguiamos pingar o TUX4 mas não o TUX2.
+
+Iniciamos o Wireshark em tux63.eth0. Pingamos o TUX4 e o TUX2. Salvamos o log.
+
+Iniciamos o Wireshark em tux62.eth0, tux63.eth0 e tux64.eth0.
+Usamos o comando ping -b 172.16.60.255 no TUX3. Salvamos os logs.
+
+Iniciamos o Wireshark em tux62.eth0, tux63.eth0 e tux64.eth0.
+Usamos o comando ping -b 172.16.60.255 no TUX2. Salvamos os logs.
+
+----- QUESTIONS -----
+
+Explicar os passos acima.
+
+Analisar os logs obtidos.
+
+-----------------------------------
+
+Configuramos a interface eth1 do TUX4 e adicionamo-la a bridge 61.
+
+ifconfig eth1 up
+ifconfig eth1 172.16.61.253/24
+
+/interface bridge print
+/interface bridge port print
+
+/interface bridge remove [find interface=ether16]
+/interface bridge port add bridge=bridge61 interface=ether16
+
+/interface bridge port print
+
+Adicionada com sucesso!
+
+No TUX4 usamos os comandos:
+	sysctl net.ipv4.ip_forward=1
+	sysctl net.ipv4.icmp_echo_ignore_broadcasts=0
+	
+Observando os IPs e MACs no TUX4:
+
+eth0:
+		IP:	172.16.60.254
+		MAC:	00:21:5a:c5:61:bb
+
+eth1:
+		IP:	172.16.61.253
+		MAC:	00:01:02:a1:35:69
+
+Depois fomos aos TUXs 2 e 3 configurar os routes corretos com os comandos:
+
+TUX2: route add -net 172.16.60.0/24 gw 172.16.61.253
+
+TUX3: route add -net 172.16.61.0/24 gw 172.16.60.254
+
+Iniciamos as capturas com o Wireshark no TUX3 onde pingamos os outros elementos da rede tendo isto produzido os resultados pretendidos.
+
+Iniciamos 2 instancias do Wireshark no TUX4, sendo cada uma destas para cada uma das interfaces.
+
+Apagamos as tabelas de ARP nos 3 TUXs com os comandos:
+
+TUX2: arp -d 172.16.61.253
+
+TUX3: arp -d 172.16.60.254
+
+TUX4: arp -d 172.16.60.1
+      arp -d 172.16.61.1
+
+Salvamos os logs obtidos.
+
+----- QUESTIONS -----
+
+Ver acima.
+
+O TUX4 tem 2 routes para ele proprio em cada rede e os outros tem 1 route para eles proprios e 1 para o TUX4.
+
+Ver route command.
+
+Ver os logs.
+
+Ver os logs.
+
+Ver os logs.
+
+-----------------------------------
+
+Ligamos o ether1 do router ao PY.1 e o ether2 ao switch. Adicionamos a porta ether2 do router na consola do switch. Configuramos os ips da porta ether2 na consola do router.
+
+Fizemos o TUX4 como default router do TUX3.
+
+Fizemos o RC como o default router do TUX2 e TUX4.
+
+Adicionamos uma route na consola do router para a network do TUX3 com o comando:
+
+/ip route add dst-address=172.16.60.0/24 gateway=172.16.61.253
+
+A partir do TUX3 pingamos o resto dos elementos da rede geral para verificar a conetividade.
+
+Agora a partir do TUX2 fizemos os comandos dados no guião e removemos a route que ligava ao TUX4, tendo apenas ligado ao router. Pingamos o TUX3 e obtivemos sucesso.
+
+Efetuamos uma captura Wireshark para realizar os passos seguintes.
+
+Voltamos a adicionar o TUX4 ao TUX2 e efetuamos a captura.
+
+Com o Ultimo passo do slide 15, o TUX2 esquece o router e passa a ligar ao TUX4 para fazer o resto dos pings.
+
+Ao pingar o LAB temos sucesso, mas ao desligar o NAT deixa de haver.
+
+----- QUESTIONS -----
+
+Ver os passos.
+
+Ver os logs.
+
+Ver os logs.
+
+?
+
+-----------------------------------
+
+Verificamos que nos 3 TUXs o ficheiro /etc/resolv.conf tinha apenas uma linha tal que:
+
+nameserver 172.16.1.1
+
+Daí abrimos o Wireshark e fizemos ping a www.google.pt e verificamos os logs.
+
+Salvamos e avançamos para a ultima task.
+
+----- QUESTIONS -----
+
+Ver os passos
+
+Ver os logs
+
+
