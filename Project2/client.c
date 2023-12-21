@@ -22,7 +22,7 @@ int parseToURL(char *input, URL *url)
 	if (regexec(&regex, input, 0, NULL, 0)) return -1;
 
 	regcomp(&regex, AT, 0);
-	if (regexec(&regex, input, 0, NULL, 0))
+	if (regexec(&regex, input, 0, NULL, 0) == 0)
 	{
 		sscanf(input, HOST_AT_REGEX, url->host);
 		sscanf(input, USER_REGEX, url->user);
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
-	printf("\n---------------\nIP Address : %s \nHost : %s\nUser : %s\nPassword : %s\nResource : %s\nFile : %s\n---------------\n",url.ip, url.host, url.user, url.pass, url.resource, url.file);
+	printf("\n---------------\nIP Address : %s \nHost : %s\nUser : %s\nPassword : %s\nResource : %s\nFile : %s\n---------------\n\n",url.ip, url.host, url.user, url.pass, url.resource, url.file);
 
 	char answer[MAX_LENGTH];
 
