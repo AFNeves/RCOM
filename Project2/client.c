@@ -47,65 +47,21 @@ int parseToURL(char *input, URL *url)
 	return 0;
 }
 
-int createSocket(char *ip, int port)
+int createSocket(char *IP, int port)
 {
-
-	int sockfd;
+	int fd;
 	struct sockaddr_in server_addr;
 
-	bzero((char *)&server_addr, sizeof(server_addr));
+	bzero((char *) &server_addr, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr = inet_addr(ip);
+	server_addr.sin_addr.s_addr = inet_addr(IP);
 	server_addr.sin_port = htons(port);
 
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-	{
-		perror("socket()");
-		exit(-1);
-	}
-	if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-	{
-		perror("connect()");
-		exit(-1);
-	}
+	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) return -1;
 
-	return sockfd;
-}
+	if (connect(fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) return -1;
 
-int authConn(const int socket, const char *user, const char *pass)
-{
-
-	char userCommand[5 + strlen(user) + 1];
-	sprintf(userCommand, "user %s\n", user);
-	char passCommand[5 + strlen(pass) + 1];
-	sprintf(passCommand, "pass %s\n", pass);
-	char answer[MAX_LENGTH];
-
-	write(socket, userCommand, strlen(userCommand));
-	if (readResponse(socket, answer) != SV_READY4PASS)
-	{
-		printf("Unknown user '%s'. Abort.\n", user);
-		exit(-1);
-	}
-
-	write(socket, passCommand, strlen(passCommand));
-	return readResponse(socket, answer);
-}
-
-int passiveMode(const int socket, char *ip, int *port)
-{
-
-	char answer[MAX_LENGTH];
-	int ip1, ip2, ip3, ip4, port1, port2;
-	write(socket, "pasv\n", 5);
-	if (readResponse(socket, answer) != SV_PASSIVE)
-		return -1;
-
-	sscanf(answer, PASSIVE_REGEX, &ip1, &ip2, &ip3, &ip4, &port1, &port2);
-	*port = port1 * 256 + port2;
-	sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
-
-	return SV_PASSIVE;
+	return fd;
 }
 
 int readResponse(const int socket, char *buffer)
@@ -159,16 +115,56 @@ int readResponse(const int socket, char *buffer)
 	return responseCode;
 }
 
-int requestResource(const int socket, char *resource)
+int authConn(const int socket, const char *user, const char *pass)
 {
 
-	char fileCommand[5 + strlen(resource) + 1], answer[MAX_LENGTH];
-	sprintf(fileCommand, "retr %s\n", resource);
-	write(socket, fileCommand, sizeof(fileCommand));
+	char userCommand[5 + strlen(user) + 1];
+	sprintf(userCommand, "user %s\n", user);
+	char passCommand[5 + strlen(pass) + 1];
+	sprintf(passCommand, "pass %s\n", pass);
+	char answer[MAX_LENGTH];
+
+	write(socket, userCommand, strlen(userCommand));
+	if (readResponse(socket, answer) != SV_READY4PASS)
+	{
+		printf("Unknown user '%s'. Abort.\n", user);
+		exit(-1);
+	}
+
+	write(socket, passCommand, strlen(passCommand));
 	return readResponse(socket, answer);
 }
 
-int getResource(const int socketA, const int socketB, char *filename)
+int passiveMode(int socket, char *IP, int *port)
+{
+	char answer[MAX_LENGTH];
+	int ip1, ip2, ip3, ip4, port1, port2;
+
+	write(socket, "pasv\n", 5);
+	if (readResponse(socket, answer) != PASSIVE_MODE) return -1;
+
+	sscanf(answer, PASSIVE_REGEX, &ip1, &ip2, &ip3, &ip4, &port1, &port2);
+
+	sprintf(IP, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
+	*port = port1 * 256 + port2;
+
+	return 0;
+}
+
+int requestResource(int socket, char *resource)
+{
+	char answer[MAX_LENGTH];
+
+	char command[6 + strlen(resource)];
+	sprintf(command, "retr %s\n", resource);
+
+	write(socket, command, sizeof(command));
+	if (readResponse(socket, answer) != READY_TRANSFER) return -1;
+
+	return 0;
+}
+
+int getResource(int socketA, int socketB, char *filename)
 {
 
 	FILE *fd = fopen(filename, "wb");
@@ -191,13 +187,13 @@ int getResource(const int socketA, const int socketB, char *filename)
 	return readResponse(socketA, buffer);
 }
 
-int closeConnection(const int socketA, const int socketB)
+int closeConn(int socketA, int socketB)
 {
-
 	char answer[MAX_LENGTH];
+
 	write(socketA, "quit\n", 5);
-	if (readResponse(socketA, answer) != SV_GOODBYE)
-		return -1;
+	if (readResponse(socketA, answer) != GOODBYE) return -1;
+
 	return close(socketA) || close(socketB);
 }
 
@@ -218,15 +214,7 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
-	printf("---------------\n
-		   IP Address : % s \n
-								Host : % s\n
-											   User : % s\n
-															  Password : % s\n
-																				 Resource : % s\n
-																									File : % s\n ",
-																											   url.ip,
-																										   url.host, url.user, url.pass, url.resource, url.file);
+	printf("---------------\nIP Address : % s \nHost : % s\nUser : % s\nPassword : % s\nResource : % s\nFile : % s\n ",url.ip, url.host, url.user, url.pass, url.resource, url.file);
 
 	char answer[MAX_LENGTH];
 	int socketA = createSocket(url.ip, FTP_PORT);
@@ -244,7 +232,7 @@ int main(int argc, char *argv[])
 
 	int port;
 	char ip[MAX_LENGTH];
-	if (passiveMode(socketA, ip, &port) != SV_PASSIVE)
+	if (passiveMode(socketA, ip, &port) != PASSIVE_MODE)
 	{
 		printf("Passive mode failed\n");
 		exit(-1);
