@@ -1,38 +1,25 @@
 #include "client.h"
 
-int getIP(char *hostname, struct hostent **h)
-{
-	if (hostname == NULL || h == NULL) return -1;
-
-	if ((*h = gethostbyname(hostname)) == NULL)
-	{
-		herror("gethostbyname()");
-		return -1;
-	}
-
-	return 0;
-}
-
 int parseToURL(char *input, URL *url)
 {
 	regex_t regex;
 	struct hostent *h; 
 
-	regcomp(&regex, BAR, 0);
+	regcomp(&regex, "/", 0);
 	if (regexec(&regex, input, 0, NULL, 0)) return -1;
 
-	regcomp(&regex, AT, 0);
+	regcomp(&regex, "@", 0);
 	if (regexec(&regex, input, 0, NULL, 0) == 0)
 	{
-		sscanf(input, HOST_AT_REGEX, url->host);
+		sscanf(input, HOST_REGEX, url->host);
 		sscanf(input, USER_REGEX, url->user);
 		sscanf(input, PASS_REGEX, url->pass);
 	}
 	else
 	{
-		sscanf(input, HOST_REGEX, url->host);
-		strcpy(url->user, DEFAULT_USER);
-		strcpy(url->pass, DEFAULT_PASS);
+		sscanf(input, DEFAULT_HOST, url->host);
+		strcpy(url->user, "anonymous");
+		strcpy(url->pass, "password");
 	}
 
 	sscanf(input, RESOURCE_REGEX, url->resource);
@@ -41,7 +28,7 @@ int parseToURL(char *input, URL *url)
 	strcpy(url->file, strrchr(input, '/') + 1);
 	if (strlen(url->file) == 0) return -1;
 
-	if (getIP(url->host, &h) != 0) return -1;
+	if ((h = gethostbyname(url->host)) == NULL) return -1;
 	strcpy(url->ip, inet_ntoa(*((struct in_addr *)h->h_addr_list[0])));
 
 	return 0;
@@ -112,7 +99,7 @@ int readResponse(int socket, char *buffer)
 		}
 	}
 
-	sscanf(buffer, RESPCODE_REGEX, &answerCode);
+	sscanf(buffer, "%d", &answerCode);
 
 	return answerCode;
 }
@@ -143,7 +130,7 @@ int passiveMode(int socket, char *IP, int *port)
 	write(socket, "PASV\n", 5);
 	if (readResponse(socket, answer) != PASSIVE_MODE) return -1;
 
-	sscanf(answer, PASSIVE_REGEX, &ip1, &ip2, &ip3, &ip4, &port1, &port2);
+	sscanf(answer, PASSIVE_MODE_REGEX, &ip1, &ip2, &ip3, &ip4, &port1, &port2);
 
 	sprintf(IP, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
 	*port = port1 * 256 + port2;
@@ -155,10 +142,10 @@ int requestResource(int socket, char *resource)
 {
 	char answer[MAX_LENGTH];
 
-	char command[6 + strlen(resource)];
-	sprintf(command, "RETR %s\n", resource);
+	char requestCommand[6 + strlen(resource)];
+	sprintf(requestCommand, "RETR %s\n", resource);
 
-	write(socket, command, sizeof(command));
+	write(socket, requestCommand, sizeof(requestCommand));
 	if (readResponse(socket, answer) != READY_TRANSFER) return -1;
 
 	return 0;
@@ -209,11 +196,11 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
-	printf("\n---------------\nIP Address : %s \nHost : %s\nUser : %s\nPassword : %s\nResource : %s\nFile : %s\n---------------\n\n",url.ip, url.host, url.user, url.pass, url.resource, url.file);
+	printf("\n------------------------------\nIP Address : %s \nHost : %s\nUser : %s\nPassword : %s\nResource : %s\nFile : %s\n------------------------------\n\n",url.ip, url.host, url.user, url.pass, url.resource, url.file);
 
 	char answer[MAX_LENGTH];
 
-	int socketA = createSocket(url.ip, FTP_PORT);
+	int socketA = createSocket(url.ip, 21);
 	if (socketA < 0 || readResponse(socketA, answer) != READY_AUTH)
 	{
 		printf("Socket A Error!\n");
@@ -258,6 +245,8 @@ int main(int argc, char *argv[])
 		printf("Sockets Close Error!\n");
 		exit(-1);
 	}
+
+	printf("Download Complete!\n\n");
 
 	return 0;
 }
