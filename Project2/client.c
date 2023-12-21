@@ -64,55 +64,57 @@ int createSocket(char *IP, int port)
 	return fd;
 }
 
-int readResponse(const int socket, char *buffer)
+int readResponse(int socket, char *buffer)
 {
-
 	char byte;
-	int index = 0, responseCode;
+	int bufferPos = 0, answerCode;
 	ResponseState state = START;
-	memset(buffer, 0, MAX_LENGTH);
 
 	while (state != END)
 	{
-
-		read(socket, &byte, 1);
-		switch (state)
+		if (read(socket, &byte, 1) > 0)
 		{
-		case START:
-			if (byte == ' ')
-				state = SINGLE;
-			else if (byte == '-')
-				state = MULTIPLE;
-			else if (byte == '\n')
-				state = END;
-			else
-				buffer[index++] = byte;
-			break;
-		case SINGLE:
-			if (byte == '\n')
-				state = END;
-			else
-				buffer[index++] = byte;
-			break;
-		case MULTIPLE:
-			if (byte == '\n')
+			switch (state)
 			{
-				memset(buffer, 0, MAX_LENGTH);
-				state = START;
-				index = 0;
+
+			case START:
+				if (byte == ' ')
+					state = SINGLE;
+				else if (byte == '-')
+					state = MULTIPLE;
+				else if (byte == '\n')
+					state = END;
+				else
+					buffer[bufferPos++] = byte;
+				break;
+
+			case SINGLE:
+				if (byte == '\n')
+					state = END;
+				else
+					buffer[bufferPos++] = byte;
+				break;
+
+			case MULTIPLE:
+				if (byte == '\n')
+				{
+					bufferPos = 0;
+					memset(buffer, 0, MAX_LENGTH);
+					state = START;
+				}
+				else
+					buffer[bufferPos++] = byte;
+				break;
+
+			default:
+				break;
 			}
-			else
-				buffer[index++] = byte;
-			break;
-		case END:
-			break;
-		default:
-			break;
 		}
 	}
 
-	sscanf(buffer, RESPCODE_REGEX, &responseCode);
-	return responseCode;
+	sscanf(buffer, RESPCODE_REGEX, &answerCode);
+
+	return answerCode;
 }
 
 int authConn(int socket, char *user, char *pass)
@@ -193,7 +195,6 @@ int closeConn(int socketA, int socketB)
 
 int main(int argc, char *argv[])
 {
-
 	if (argc != 2)
 	{
 		printf("Usage: %s <URL>\n", argv[0]);
@@ -204,56 +205,57 @@ int main(int argc, char *argv[])
 	memset(&url, 0, sizeof(url));
 	if (parseURL(argv[1], &url) != 0)
 	{
-		printf("Parse error!\n");
+		printf("Parse Error!\n");
 		exit(-1);
 	}
 
-	printf("---------------\nIP Address : % s \nHost : % s\nUser : % s\nPassword : % s\nResource : % s\nFile : % s\n ",url.ip, url.host, url.user, url.pass, url.resource, url.file);
+	printf("\n---------------\nIP Address : % s \nHost : % s\nUser : % s\nPassword : % s\nResource : % s\nFile : % s\n---------------\n",url.ip, url.host, url.user, url.pass, url.resource, url.file);
 
 	char answer[MAX_LENGTH];
+
 	int socketA = createSocket(url.ip, FTP_PORT);
-	if (socketA < 0 || readResponse(socketA, answer) != SV_READY4AUTH)
+	if (socketA < 0 || readResponse(socketA, answer) != READY_AUTH)
 	{
-		printf("Socket to '%s' and port %d failed\n", url.ip, FTP_PORT);
+		printf("Socket A Error!\n");
 		exit(-1);
 	}
 
-	if (authConn(socketA, url.user, url.password) != SV_LOGINSUCCESS)
+	if (authConn(socketA, url.user, url.pass))
 	{
-		printf("Authentication failed with username = '%s' and password = '%s'.\n", url.user, url.password);
+		printf("Authentication Error!\n");
 		exit(-1);
 	}
 
 	int port;
 	char ip[MAX_LENGTH];
-	if (passiveMode(socketA, ip, &port) != PASSIVE_MODE)
+	if (passiveMode(socketA, ip, &port))
 	{
-		printf("Passive mode failed\n");
+		printf("Passive Mode Error!\n");
 		exit(-1);
 	}
 
 	int socketB = createSocket(ip, port);
 	if (socketB < 0)
 	{
-		printf("Socket to '%s:%d' failed\n", ip, port);
+		printf("Socket B Error!\n");
 		exit(-1);
 	}
 
-	if (requestResource(socketA, url.resource) != SV_READY4TRANSFER)
+	if (requestResource(socketA, url.resource))
 	{
-		printf("Unknown resouce '%s' in '%s:%d'\n", url.resource, ip, port);
+		printf("Unknown Resource!\n");
 		exit(-1);
 	}
 
-	if (getResource(socketA, socketB, url.file) != SV_TRANSFER_COMPLETE)
+	if (getResource(socketA, socketB, url.file))
 	{
-		printf("Error transfering file '%s' from '%s:%d'\n", url.file, ip, port);
+		printf("Download Error!\n");
 		exit(-1);
 	}
 
 	if (closeConnection(socketA, socketB) != 0)
 	{
-		printf("Sockets close error\n");
+		printf("Sockets Close Error!\n");
 		exit(-1);
 	}
 

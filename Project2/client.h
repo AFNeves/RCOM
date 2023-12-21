@@ -63,16 +63,16 @@ int getIP(char *hostname, struct hostent **h);
 
 int parseToURL(char *input, URL *url);
 
-int createSocket(char *ip, int port);
+int createSocket(char *IP, int port);
 
 int authConn(int socket, char *user, char *pass);
 
-int readResponse(const int socket, char *buffer);
+int readResponse(int socket, char *buffer);
 
-int passiveMode(const int socket, char* ip, int *port);
+int passiveMode(int socket, char* IP, int *port);
 
-int requestResource(const int socket, char *resource);
+int requestResource(int socket, char *resource);
 
-int getResource(const int socketA, const int socketB, char *filename);
+int getResource(int socketA, int socketB, char *filename);
 
-int closeConnection(const int socketA, const int socketB);
+int closeConnection(int socketA, int socketB);
