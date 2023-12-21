@@ -65,7 +65,7 @@ int parseToURL(char *input, URL *url);
 
 int createSocket(char *ip, int port);
 
-int authConn(const int socket, const char *user, const char *pass);
+int authConn(int socket, char *user, char *pass);
 
 int readResponse(const int socket, char *buffer);
 

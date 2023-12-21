@@ -115,24 +115,22 @@ int readResponse(const int socket, char *buffer)
 	return responseCode;
 }
 
-int authConn(const int socket, const char *user, const char *pass)
+int authConn(int socket, char *user, char *pass)
 {
-
-	char userCommand[5 + strlen(user) + 1];
-	sprintf(userCommand, "user %s\n", user);
-	char passCommand[5 + strlen(pass) + 1];
-	sprintf(passCommand, "pass %s\n", pass);
 	char answer[MAX_LENGTH];
 
+	char userCommand[6 + strlen(user)];
+	sprintf(userCommand, "user %s\n", user);
+	char passCommand[6 + strlen(pass)];
+	sprintf(passCommand, "pass %s\n", pass);
+
 	write(socket, userCommand, strlen(userCommand));
-	if (readResponse(socket, answer) != SV_READY4PASS)
-	{
-		printf("Unknown user '%s'. Abort.\n", user);
-		exit(-1);
-	}
+	if (readResponse(socket, answer) != READY_PASS) return -1;
 
 	write(socket, passCommand, strlen(passCommand));
-	return readResponse(socket, answer);
+	if (readResponse(socket, answer) != LOGIN_SUCCESS) return -1;
+
+	return 0;
 }
 
 int passiveMode(int socket, char *IP, int *port)
@@ -166,25 +164,21 @@ int requestResource(int socket, char *resource)
 
 int getResource(int socketA, int socketB, char *filename)
 {
+	int bytes;
+	char answer[MAX_LENGTH], buffer[MAX_LENGTH];
 
 	FILE *fd = fopen(filename, "wb");
-	if (fd == NULL)
+	if (fd == NULL) return -1;
+
+	while ((bytes = read(socketB, buffer, MAX_LENGTH)) > 0)
 	{
-		printf("Error opening or creating file '%s'\n", filename);
-		exit(-1);
+		if (fwrite(buffer, bytes, 1, fd) < 0) return -1;
 	}
+	
+	if (readResponse(socketA, answer) != TRANSFER_COMPLETE) return -1;
 
-	char buffer[MAX_LENGTH];
-	int bytes;
-	do
-	{
-		bytes = read(socketB, buffer, MAX_LENGTH);
-		if (fwrite(buffer, bytes, 1, fd) < 0)
-			return -1;
-	} while (bytes);
 	fclose(fd);
-
-	return readResponse(socketA, buffer);
+	return 0;
 }
 
 int closeConn(int socketA, int socketB)
