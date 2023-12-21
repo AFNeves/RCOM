@@ -75,4 +75,4 @@ int requestResource(int socket, char *resource);
 
 int getResource(int socketA, int socketB, char *filename);
 
-int closeConnection(int socketA, int socketB);
+int closeConn(int socketA, int socketB);

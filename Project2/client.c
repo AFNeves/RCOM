@@ -203,13 +203,13 @@ int main(int argc, char *argv[])
 
 	URL url;
 	memset(&url, 0, sizeof(url));
-	if (parseURL(argv[1], &url) != 0)
+	if (parseToURL(argv[1], &url) != 0)
 	{
 		printf("Parse Error!\n");
 		exit(-1);
 	}
 
-	printf("\n---------------\nIP Address : % s \nHost : % s\nUser : % s\nPassword : % s\nResource : % s\nFile : % s\n---------------\n",url.ip, url.host, url.user, url.pass, url.resource, url.file);
+	printf("\n---------------\nIP Address : %s \nHost : %s\nUser : %s\nPassword : %s\nResource : %s\nFile : %s\n---------------\n",url.ip, url.host, url.user, url.pass, url.resource, url.file);
 
 	char answer[MAX_LENGTH];
 
@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
-	if (closeConnection(socketA, socketB) != 0)
+	if (closeConn(socketA, socketB) != 0)
 	{
 		printf("Sockets Close Error!\n");
 		exit(-1);
