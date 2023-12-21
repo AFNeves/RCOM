@@ -9,23 +9,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-/* FTP SETTINGS */
-#define FTP_PORT 21
-
-/* DEFAULT CREDENTIALS */
-#define DEFAULT_USER "anonymous"
-#define DEFAULT_PASS "password"
-
 /* REGULAR EXPRESSIONS */
-#define AT              "@"
-#define BAR             "/"
-#define HOST_REGEX      "%*[^/]//%[^/]"
-#define HOST_AT_REGEX   "%*[^/]//%*[^@]@%[^/]"
-#define RESOURCE_REGEX  "%*[^/]//%*[^/]/%s"
-#define USER_REGEX      "%*[^/]//%[^:/]"
-#define PASS_REGEX      "%*[^/]//%*[^:]:%[^@\n$]"
-#define RESPCODE_REGEX  "%d"
-#define PASSIVE_REGEX   "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]"
+#define DEFAULT_HOST "%*[^/]//%[^/]"
+#define HOST_REGEX "%*[^/]//%*[^@]@%[^/]"
+#define USER_REGEX "%*[^/]//%[^:/]"
+#define PASS_REGEX "%*[^/]//%*[^:]:%[^@\n$]"
+#define RESOURCE_REGEX "%*[^/]//%*[^/]/%s"
+#define PASSIVE_MODE_REGEX "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]"
 
 /* SERVER RESPONSES */
 #define READY_AUTH 220
@@ -37,8 +27,8 @@
 #define GOODBYE 221
 
 /* LENGTHS */
-#define MAX_LENGTH 300
-#define URL_LENGTH 100
+#define MAX_LENGTH 500
+#define URL_LENGTH 150
 
 typedef struct
 {
@@ -58,15 +48,13 @@ typedef enum
     END
 } ResponseState;
 
-int getIP(char *hostname, struct hostent **h);
-
 int parseToURL(char *input, URL *url);
 
 int createSocket(char *IP, int port);
 
-int authConn(int socket, char *user, char *pass);
-
 int readResponse(int socket, char *buffer);
+
+int authConn(int socket, char *user, char *pass);
 
 int passiveMode(int socket, char* IP, int *port);
 
