@@ -38,7 +38,7 @@ int parseToURL(char *input, URL *url)
 	sscanf(input, RESOURCE_REGEX, url->resource);
 	if (strlen(url->resource) == 0) return -1;
 
-	strcpy(url->file, strrchr(url->resource, '/') + 1);
+	strcpy(url->file, strrchr(input, '/') + 1);
 	if (strlen(url->file) == 0) return -1;
 
 	if (getIP(url->host, &h) != 0) return -1;
@@ -122,9 +122,9 @@ int authConn(int socket, char *user, char *pass)
 	char answer[MAX_LENGTH];
 
 	char userCommand[6 + strlen(user)];
-	sprintf(userCommand, "user %s\n", user);
+	sprintf(userCommand, "USER %s\n", user);
 	char passCommand[6 + strlen(pass)];
-	sprintf(passCommand, "pass %s\n", pass);
+	sprintf(passCommand, "PASS %s\n", pass);
 
 	write(socket, userCommand, strlen(userCommand));
 	if (readResponse(socket, answer) != READY_PASS) return -1;
@@ -140,7 +140,7 @@ int passiveMode(int socket, char *IP, int *port)
 	char answer[MAX_LENGTH];
 	int ip1, ip2, ip3, ip4, port1, port2;
 
-	write(socket, "pasv\n", 5);
+	write(socket, "PASV\n", 5);
 	if (readResponse(socket, answer) != PASSIVE_MODE) return -1;
 
 	sscanf(answer, PASSIVE_REGEX, &ip1, &ip2, &ip3, &ip4, &port1, &port2);
@@ -156,7 +156,7 @@ int requestResource(int socket, char *resource)
 	char answer[MAX_LENGTH];
 
 	char command[6 + strlen(resource)];
-	sprintf(command, "retr %s\n", resource);
+	sprintf(command, "RETR %s\n", resource);
 
 	write(socket, command, sizeof(command));
 	if (readResponse(socket, answer) != READY_TRANSFER) return -1;
@@ -187,7 +187,7 @@ int closeConn(int socketA, int socketB)
 {
 	char answer[MAX_LENGTH];
 
-	write(socketA, "quit\n", 5);
+	write(socketA, "QUIT\n", 5);
 	if (readResponse(socketA, answer) != GOODBYE) return -1;
 
 	return close(socketA) || close(socketB);

@@ -12,8 +12,7 @@
 /* FTP SETTINGS */
 #define FTP_PORT 21
 
-/* LOGIN CREDENTIALS */
-#define RCOM "rcom"
+/* DEFAULT CREDENTIALS */
 #define DEFAULT_USER "anonymous"
 #define DEFAULT_PASS "password"
 
