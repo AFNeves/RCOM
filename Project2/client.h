@@ -29,7 +29,7 @@
 #define PASSIVE_REGEX   "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]"
 
 /* SERVER RESPONSES */
-#define READY_AUTH 210
+#define READY_AUTH 220
 #define READY_PASS 331
 #define LOGIN_SUCCESS 230
 #define PASSIVE_MODE 227
